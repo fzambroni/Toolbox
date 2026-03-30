@@ -1,7 +1,9 @@
 #NoTrayIcon
 #include <GUIConstantsEx.au3>
 #include <WindowsConstants.au3>
+#include <StructureConstants.au3>
 #include <TabConstants.au3>
+#include <GuiTab.au3>
 #include <ListViewConstants.au3>
 #include <GuiListView.au3>
 #include <GuiComboBox.au3>
@@ -9,6 +11,8 @@
 #include <File.au3>
 #include <String.au3>
 #include <EditConstants.au3>
+#include <WindowsStylesConstants.au3>
+#include <StaticConstants.au3>
 
 
 ;=============================================================================
@@ -19,6 +23,12 @@
 
 Opt("GUIOnEventMode", 1)
 Opt("MustDeclareVars", 0)
+
+; === Window sizing ===
+Global Const $MIN_W = 1050
+Global Const $MIN_H = 700
+Global Const $BOTTOM_BAR_H = 70
+Global Const $TAB_TOP_Y = 58
 
 ; === CONSTANTES GLOBAIS ===
 Global Const $TITLE       = "Ortems Toolbox v2.0"
@@ -64,10 +74,21 @@ Global $g_aSO[0][6]        ; Sales Orders
 
 ; Handles dos controles principais
 Global $g_hMain, $g_hTab
+Global $g_hTabHandle = 0
+Global $g_idBottomLine = 0
+Global $g_lblFooter = 0
 Global $g_hLV_Cal, $g_hLV_Mach, $g_hLV_Ops, $g_hLV_Rout
 Global $g_hLV_Mat, $g_hLV_BOM, $g_hLV_WO, $g_hLV_WOL
 Global $g_hLV_SR, $g_hLV_Cap, $g_hLV_Stk
 Global $g_hLog
+; Tab enable/disable state (Tab control doesn't truly disable items; we block selection via WM_NOTIFY)
+Global $g_aTabEnabled[0]
+Global $g_aTabBaseText[0]
+Global $g_bAllowProgrammaticTabChange = False
+
+; Settings persistence
+Global Const $g_sIniFile = @ScriptDir & "\settings.ini"
+
 
 ; Indices das tabs
 Global $g_iTabDB = 0, $g_iTabMod = 1
@@ -83,7 +104,10 @@ Main()
 
 Func Main()
     CreateMainWindow()
+    _LoadSettings()
     GUISetState(@SW_SHOW, $g_hMain)
+    _RefreshModuleFlags(True)
+    _OnResize()
 
     While 1
         Sleep(100)
@@ -97,53 +121,57 @@ Func CreateMainWindow()
     $g_hMain = GUICreate($TITLE, $APP_WIDTH, $APP_HEIGHT, -1, -1, _
         BitOR($GUI_SS_DEFAULT_GUI, $WS_SIZEBOX, $WS_MAXIMIZEBOX))
     GUISetOnEvent($GUI_EVENT_CLOSE, "_OnClose")
+    GUISetOnEvent($GUI_EVENT_RESIZED, "_OnResize")
+    GUIRegisterMsg($WM_GETMINMAXINFO, "_WM_GETMINMAXINFO")
+    GUIRegisterMsg($WM_NOTIFY, "_WM_NOTIFY")
 
     ; Barra de titulo/logo
     GUICtrlCreateLabel("ORTEMS TOOLBOX", 10, 8, 300, 26)
     GUICtrlSetFont(-1, 14, 800, 0, "Segoe UI")
     GUICtrlSetColor(-1, 0x003366)
 
-    GUICtrlCreateLabel("Ferramenta de criacao de demos customizadas - Base SQL", 10, 34, 500, 18)
+    GUICtrlCreateLabel("Custom demo builder for Ortems - SQL Database", 10, 34, 500, 18)
     GUICtrlSetFont(-1, 9, 400, 2, "Segoe UI")
     GUICtrlSetColor(-1, 0x666666)
 
     ; Status de conexao
     GUICtrlCreateLabel("Status:", 650, 10, 50, 18)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_lblStatus = GUICtrlCreateLabel("Desconectado", 705, 10, 200, 18)
+    Global $g_lblStatus = GUICtrlCreateLabel("Disconnected", 705, 10, 390, 18);,$SS_BLACKRECT)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
     GUICtrlSetColor($g_lblStatus, 0xCC0000)
 
     ; === ABAS PRINCIPAIS ===
-    $g_hTab = GUICtrlCreateTab(5, 58, $APP_WIDTH - 10, $APP_HEIGHT - 130)
+    $g_hTab = GUICtrlCreateTab(5, $TAB_TOP_Y, $APP_WIDTH - 10, $APP_HEIGHT - 130)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    $g_hTabHandle = GUICtrlGetHandle($g_hTab)
 
-    ; ---- ABA 1: BANCO DE DADOS ----
-    GUICtrlCreateTabItem("1. Banco de Dados")
+    ; ---- TAB 1: BANCO DE DADOS ----
+    GUICtrlCreateTabItem("1. Database")
     _CreateTabDatabase()
 
     ; ---- ABA 2: MODULOS ----
-    GUICtrlCreateTabItem("2. Modulos")
+    GUICtrlCreateTabItem("2. Modules")
     _CreateTabModules()
 
     ; ---- ABA 3: CALENDARIOS ----
-    GUICtrlCreateTabItem("3. Calendarios")
+    GUICtrlCreateTabItem("3. Calendars")
     _CreateTabCalendars()
 
     ; ---- ABA 4: MAQUINAS ----
-    GUICtrlCreateTabItem("4. Maquinas")
+    GUICtrlCreateTabItem("4. Machines")
     _CreateTabMachines()
 
     ; ---- ABA 5: OPERACOES ----
-    GUICtrlCreateTabItem("5. Operacoes")
+    GUICtrlCreateTabItem("5. Operations")
     _CreateTabOperations()
 
     ; ---- ABA 6: ROTEIROS ----
-    GUICtrlCreateTabItem("6. Roteiros")
+    GUICtrlCreateTabItem("6. Routings")
     _CreateTabRoutings()
 
     ; ---- ABA 7: MATERIAIS ----
-    GUICtrlCreateTabItem("7. Materiais")
+    GUICtrlCreateTabItem("7. Items")
     _CreateTabMaterials()
 
     ; ---- ABA 8: BOM ----
@@ -151,64 +179,65 @@ Func CreateMainWindow()
     _CreateTabBOM()
 
     ; ---- ABA 9: ORDENS DE PRODUCAO ----
-    GUICtrlCreateTabItem("9. Ordens (WO)")
+    GUICtrlCreateTabItem("9. Work Orders (WO)")
     _CreateTabWO()
 
     ; ---- ABA 10: LINKS WO ----
-    GUICtrlCreateTabItem("10. Links WO")
+    GUICtrlCreateTabItem("10. WO Links")
     _CreateTabWOLinks()
 
     ; ---- ABA 11: RECURSOS SECUNDARIOS ----
-    GUICtrlCreateTabItem("11. Rec. Secundarios")
+    GUICtrlCreateTabItem("11. Secondary Resources")
     _CreateTabSecResources()
 
     ; ---- ABA 12: CAPACIDADE ----
-    GUICtrlCreateTabItem("12. Capacidade")
+    GUICtrlCreateTabItem("12. Capacity")
     _CreateTabCapacity()
 
     ; ---- ABA 13: ESTOQUES ----
-    GUICtrlCreateTabItem("13. Movim. Estoque")
+    GUICtrlCreateTabItem("13. Inventory Movements")
     _CreateTabStockMov()
 
     ; ---- ABA 14: GERAR SQL ----
-    GUICtrlCreateTabItem("14. Gerar e Executar SQL")
+    GUICtrlCreateTabItem("14. Generate & Run SQL")
     _CreateTabSQL()
 
     GUICtrlCreateTabItem("")
 
     ; === BARRA INFERIOR ===
-    GUICtrlCreateLabel("", 0, $APP_HEIGHT - 65, $APP_WIDTH, 2)
+    $g_idBottomLine = GUICtrlCreateLabel("", 0, $APP_HEIGHT - 65, $APP_WIDTH, 2)
     GUICtrlSetBkColor(-1, 0xCCCCCC)
 
-    Global $g_btnImportXLS = GUICtrlCreateButton("Importar Excel...", 10, $APP_HEIGHT - 58, 140, 32)
+    Global $g_btnImportXLS = GUICtrlCreateButton("Import Excel...", 10, $APP_HEIGHT - 58, 140, 32)
     GUICtrlSetOnEvent($g_btnImportXLS, "_ImportExcel")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
-    Global $g_btnExportXLS = GUICtrlCreateButton("Exportar Excel...", 160, $APP_HEIGHT - 58, 140, 32)
+    Global $g_btnExportXLS = GUICtrlCreateButton("Export Excel...", 160, $APP_HEIGHT - 58, 140, 32)
     GUICtrlSetOnEvent($g_btnExportXLS, "_ExportExcel")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
-    Global $g_btnClearDB = GUICtrlCreateButton("Limpar Banco", 310, $APP_HEIGHT - 58, 130, 32)
+    Global $g_btnClearDB = GUICtrlCreateButton("Clear DB", 310, $APP_HEIGHT - 58, 130, 32)
     GUICtrlSetOnEvent($g_btnClearDB, "_ClearDatabase")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetBkColor($g_btnClearDB, 0xFFDDDD)
 
-    Global $g_btnGenerate = GUICtrlCreateButton("GERAR SQL", 460, $APP_HEIGHT - 58, 130, 32)
+    Global $g_btnGenerate = GUICtrlCreateButton("GENERATE SQL", 460, $APP_HEIGHT - 58, 130, 32)
     GUICtrlSetOnEvent($g_btnGenerate, "_GenerateSQL")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
 
-    Global $g_btnExecute = GUICtrlCreateButton("EXECUTAR NO BANCO", 600, $APP_HEIGHT - 58, 170, 32)
+    Global $g_btnExecute = GUICtrlCreateButton("RUN ON DB", 600, $APP_HEIGHT - 58, 170, 32)
     GUICtrlSetOnEvent($g_btnExecute, "_ExecuteSQL")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
     GUICtrlSetBkColor($g_btnExecute, 0xDDFFDD)
 
-    Global $g_btnSaveSQL = GUICtrlCreateButton("Salvar SQL...", 780, $APP_HEIGHT - 58, 130, 32)
+    Global $g_btnSaveSQL = GUICtrlCreateButton("Save SQL...", 780, $APP_HEIGHT - 58, 130, 32)
     GUICtrlSetOnEvent($g_btnSaveSQL, "_SaveSQL")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
-    GUICtrlCreateLabel($TITLE & " | Substitui Toolbox_v2.0.1.xlsm | " & @YEAR, 920, $APP_HEIGHT - 45, 170, 20)
+    $g_lblFooter = GUICtrlCreateLabel($TITLE & " | Replaces Toolbox_v2.0.1.xlsm | " & @YEAR, 920, $APP_HEIGHT - 45, 170, 20)
     GUICtrlSetFont(-1, 7, 400, 0, "Segoe UI")
     GUICtrlSetColor(-1, 0x999999)
+    _InitTabState()
 EndFunc
 
 ;=============================================================================
@@ -217,70 +246,66 @@ EndFunc
 Func _CreateTabDatabase()
     Local $y = 85, $xL = 20, $xV = 200
 
-    GUICtrlCreateGroup("Conexao SQL Server", $xL, $y, 600, 200)
-    $y += 25
+    GUICtrlCreateGroup("SQL Server Connection", $xL, $y, 620, 225)
+    $y += 28
 
-    GUICtrlCreateLabel("Servidor / Instancia:", $xL + 10, $y, 170, 20)
+    GUICtrlCreateLabel("Server / Instance:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtServer = GUICtrlCreateInput("localhost\SQLEXPRESS", $xV, $y, 200, 22)
+    Global $g_edtServer = GUICtrlCreateInput("localhost\SQLEXPRESS", $xV, $y, 220, 22)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    $y += 30
+    $y += 32
 
-    GUICtrlCreateLabel("Nome do Banco:", $xL + 10, $y, 170, 20)
+    GUICtrlCreateLabel("Database name:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtDatabase = GUICtrlCreateInput("ORTEMS_DEMO", $xV, $y, 200, 22)
+    Global $g_edtDatabase = GUICtrlCreateInput("ORTEMS_DEMO", $xV, $y, 220, 22)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    $y += 30
+    $y += 32
 
-    GUICtrlCreateLabel("Autenticacao:", $xL + 10, $y, 170, 20)
+    GUICtrlCreateLabel("Authentication:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_cmbAuth = GUICtrlCreateCombo("Windows Authentication", $xV, $y, 200, 22)
+    Global $g_cmbAuth = GUICtrlCreateCombo("Windows Authentication", $xV, $y, 220, 22)
     GUICtrlSetData($g_cmbAuth, "SQL Server Authentication")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetOnEvent($g_cmbAuth, "_OnAuthChange")
-    $y += 30
+    $y += 32
 
-    GUICtrlCreateLabel("Usuario:", $xL + 10, $y, 170, 20)
+    GUICtrlCreateLabel("User:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtUser = GUICtrlCreateInput("", $xV, $y, 200, 22)
+    Global $g_edtUser = GUICtrlCreateInput("", $xV, $y, 220, 22)
     GUICtrlSetState($g_edtUser, $GUI_DISABLE)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    $y += 30
+    $y += 32
 
-    GUICtrlCreateLabel("Senha:", $xL + 10, $y, 170, 20)
+    GUICtrlCreateLabel("Password:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtPass = GUICtrlCreateInput("", $xV, $y, 200, 22, $ES_PASSWORD)
+    Global $g_edtPass = GUICtrlCreateInput("", $xV, $y, 220, 22, $ES_PASSWORD)
     GUICtrlSetState($g_edtPass, $GUI_DISABLE)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    $y += 40
+    $y += 38
 
-    Global $g_btnConnect = GUICtrlCreateButton("Testar Conexao", $xV, $y, 150, 30)
+    Global $g_btnConnect = GUICtrlCreateButton("  Test Connection", $xV, $y, 160, 30)
     GUICtrlSetOnEvent($g_btnConnect, "_TestConnection")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
 
-    ; Info do caminho do banco (compatibilidade com Excel)
-    $y = 320
-    GUICtrlCreateGroup("Informacoes", $xL, $y, 600, 120)
-    $y += 25
-
-    GUICtrlCreateLabel("String de Conexao:", $xL + 10, $y, 170, 20)
-    GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtConnStr = GUICtrlCreateEdit("", $xL + 10, $y + 22, 570, 60, $ES_READONLY + $WS_VSCROLL)
+    ; Connection string display
+    $y = 330
+    GUICtrlCreateGroup("Active connection string", $xL, $y, 620, 80)
+    Global $g_edtConnStr = GUICtrlCreateEdit("", $xL + 10, $y + 22, 590, 48, $ES_READONLY + $WS_VSCROLL)
     GUICtrlSetFont(-1, 8, 400, 0, "Courier New")
     GUICtrlSetBkColor($g_edtConnStr, 0xF5F5F5)
 
-    ; Instrucoes
-    $y = 470
-    GUICtrlCreateGroup("Como usar o Toolbox", $xL, $y, 700, 150)
+    ; Instructions
+    $y = 430
+    GUICtrlCreateGroup("How to use the Toolbox", $xL, $y, 720, 170)
     $y += 22
     Local $sInfo = "WORKFLOW:" & @CRLF & _
-        "  1. Configure a conexao com o banco de dados Ortems (acima)" & @CRLF & _
-        "  2. Va para a aba '2. Modulos' e selecione os modulos Ortems necessarios para o demo" & @CRLF & _
-        "  3. Preencha os dados nas abas (Calendarios, Maquinas, Operacoes, Roteiros, Materiais, etc.)" & @CRLF & _
-        "  4. Use o botao 'GERAR SQL' para visualizar as instrucoes SQL" & @CRLF & _
-        "  5. Use 'EXECUTAR NO BANCO' para inserir os dados no banco Ortems" & @CRLF & _
-        "  Dica: Voce pode importar dados de um arquivo Excel existente com 'Importar Excel...'"
-    GUICtrlCreateEdit($sInfo, $xL + 10, $y, 680, 110, $ES_READONLY + $WS_VSCROLL)
+        "  1. Configure the connection to the Ortems database (above) and click 'Test Connection'" & @CRLF & _
+        "  2. Go to the '2. Modules' tab and select the required Ortems modules for the demo" & @CRLF & _
+        "  3. Fill in the data in the tabs (Calendars, Machines, Operations, Routings, Items, etc.)" & @CRLF & _
+        "  4. Click 'GENERATE SQL' in the bottom toolbar to build the SQL script" & @CRLF & _
+        "  5. Click 'RUN ON DB' to execute the SQL and insert data into the Ortems database" & @CRLF & _
+        "  Tip: Settings (server, modules) are automatically saved to settings.ini"
+    GUICtrlCreateEdit($sInfo, $xL + 10, $y, 700, 130, $ES_READONLY + $WS_VSCROLL)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetBkColor(-1, 0xFFFFF0)
 EndFunc
@@ -289,71 +314,74 @@ EndFunc
 ; ABA: SELECAO DE MODULOS
 ;=============================================================================
 Func _CreateTabModules()
-    GUICtrlCreateLabel("Selecao de Modulos Ortems", 20, 80, 500, 22)
+    GUICtrlCreateLabel("Ortems Module Selection", 20, 80, 500, 22)
     GUICtrlSetFont(-1, 12, 700, 0, "Segoe UI")
     GUICtrlSetColor(-1, 0x003366)
 
-    GUICtrlCreateLabel("Responda as perguntas abaixo para configurar os modulos do demo:", 20, 105, 700, 18)
+    GUICtrlCreateLabel("Answer the questions below to configure the demo modules:", 20, 105, 700, 18)
     GUICtrlSetFont(-1, 9, 400, 2, "Segoe UI")
 
     Local $y = 135, $xL = 20
-    GUICtrlCreateGroup("Configuracao de Modulos", $xL, $y, 900, 480)
+    GUICtrlCreateGroup("Module Configuration", $xL, $y, 900, 520)
     $y += 20
 
     ; Q1: PS vs MP
-    _CreateModuleQuestion($y, "Q1:", "O cliente precisa de escalonamento continuo de operacoes (PS) ou", "planejamento em bucket com nivelamento de carga (MP)?")
-    Global $g_rbPS = GUICtrlCreateRadio("PS - Production Scheduling (escalonamento continuo)", $xL + 30, $y + 40, 400, 20)
+    _CreateModuleQuestion($y, "Q1:", "Does the customer need continuous operation scheduling (PS) or", "bucket planning with load leveling (MP)?")
+    Global $g_rbPS = GUICtrlCreateRadio("PS - Production Scheduling (continuous scheduling)", $xL + 30, $y + 40, 420, 20)
+    GUICtrlSetOnEvent($g_rbPS, "_OnModuleSelectionChanged")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetState($g_rbPS, $GUI_CHECKED)
-    Global $g_rbMP = GUICtrlCreateRadio("MP - Master Planning (planejamento em bucket)", $xL + 30, $y + 62, 400, 20)
+    Global $g_rbMP = GUICtrlCreateRadio("MP - Master Planning (bucket planning)", $xL + 30, $y + 62, 420, 20)
+    GUICtrlSetOnEvent($g_rbMP, "_OnModuleSelectionChanged")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     $y += 92
 
     ; Q2: SRP
-    Global $g_chkSRP = _CreateModuleCheckbox($y, $xL, "Q2:", "Sincronizacao automatica de OPs entre niveis de BOM? (Modulo SRP)")
-    $y += 45
+    Global $g_chkSRP = _CreateModuleCheckbox($y, $xL, "Q2:", "Automatic synchronization across BOM levels? (SRP module)")
+    $y += 38
 
     ; Q3: WO Links
-    Global $g_chkWOL = _CreateModuleCheckbox($y, $xL, "Q3:", "OPs ligadas com restricoes de precedencia pre-definidas? (WO Links)")
-    $y += 45
+    Global $g_chkWOL = _CreateModuleCheckbox($y, $xL, "Q3:", "Pre-defined precedence constraints between WOs/operations? (WO Links)")
+    $y += 38
 
     ; Q4: Complex Routings
-    Global $g_chkCROUT = _CreateModuleCheckbox($y, $xL, "Q4:", "Roteiros complexos, nao-lineares ou com sincronizacao start-start? (Roteiros Arvore)")
-    $y += 45
+    Global $g_chkCROUT = _CreateModuleCheckbox($y, $xL, "Q4:", "Complex, non-linear routings, or start-start synchronization? (Complex routings)")
+    $y += 38
 
     ; Q5: Secondary Resources
-    Global $g_chkSR = _CreateModuleCheckbox($y, $xL, "Q5:", "Restricoes de mao-de-obra ou ferramentas? Otimizacao de multiplos recursos? (Recursos Secundarios)")
-    $y += 45
+    Global $g_chkSR = _CreateModuleCheckbox($y, $xL, "Q5:", "Labor/tool constraints? Multi-resource optimization? (Secondary resources)")
+    $y += 38
 
     ; Q6: Batch Machines
-    Global $g_chkBATCH = _CreateModuleCheckbox($y, $xL, "Q6:", "Maquinas onde operacoes podem ser agrupadas em lote? Ex: forno (Batch Machines)")
-    $y += 45
+    Global $g_chkBATCH = _CreateModuleCheckbox($y, $xL, "Q6:", "Batch machines where operations can be grouped (e.g., oven)? (Batch machines)")
+    $y += 38
 
     ; Q7: Inventory
-    Global $g_chkINV = _CreateModuleCheckbox($y, $xL, "Q7:", "Mostrar funcoes de estoque em detalhe, ex: reabastecimento de materias-primas? (Mov. Estoque)")
-    $y += 45
+    Global $g_chkINV = _CreateModuleCheckbox($y, $xL, "Q7:", "Show detailed inventory features (e.g., raw material replenishment)? (Inventory)")
+    $y += 38
 
     ; Q8: Markers
-    Global $g_chkMRK = _CreateModuleCheckbox($y, $xL, "Q8:", "Indicacoes visuais no planejamento para eventos especiais / colaboracao entre planejadores? (Marcadores)")
-    $y += 45
+    Global $g_chkMRK = _CreateModuleCheckbox($y, $xL, "Q8:", "Visual markers in planning for special events / collaboration? (Markers)")
+    $y += 38
 
     ; Q9: Limited Resources
-    Global $g_chkLR = _CreateModuleCheckbox($y, $xL, "Q9:", "Recursos com numero limitado compartilhados entre multiplas operacoes? (Recursos Limitados)")
-    $y += 45
+    Global $g_chkLR = _CreateModuleCheckbox($y, $xL, "Q9:", "Limited shared resources across multiple operations? (Limited resources)")
+    $y += 38
 
     ; Q10: Parameters
-    Global $g_chkPRM = _CreateModuleCheckbox($y, $xL, "Q10:", "Agrupamento por categorias (cor, temperatura), changeovers entre ferramentas? (Parametros)")
-    $y += 45
+    Global $g_chkPRM = _CreateModuleCheckbox($y, $xL, "Q10:", "Grouping by categories (color, temperature), changeovers between tools? (Parameters)")
+    $y += 38
 
-    ; Botao aplicar
-    $y = $APP_HEIGHT - 145
-    Global $g_btnApplyMod = GUICtrlCreateButton("Aplicar Selecao de Modulos", 20, $y, 250, 35)
+    ; Note: changes apply automatically on selection. Button below for confirmation summary.
+    $y += 18
+    Global $g_btnApplyMod = GUICtrlCreateButton("Apply / Show Summary", 20, $y, 200, 28)
     GUICtrlSetOnEvent($g_btnApplyMod, "_ApplyModules")
-    GUICtrlSetFont(-1, 10, 700, 0, "Segoe UI")
+    GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
     GUICtrlSetBkColor($g_btnApplyMod, 0xDDEEFF)
 
-    GUICtrlCreateLabel("Os modulos selecionados determinam quais abas de dados serao habilitadas.", 290, $y + 8, 500, 20)
+    Global $g_lblModHint = GUICtrlCreateLabel("  ✔  Tabs are updated automatically when you change a selection.", 230, $y + 6, 660, 18)
     GUICtrlSetFont(-1, 9, 400, 2, "Segoe UI")
+    GUICtrlSetColor(-1, 0x007700)
 EndFunc
 
 Func _CreateModuleQuestion($y, $sNum, $sQ1, $sQ2)
@@ -368,7 +396,8 @@ EndFunc
 Func _CreateModuleCheckbox($y, $xL, $sNum, $sText)
     GUICtrlCreateLabel($sNum, $xL + 10, $y + 2, 35, 18)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
-    Local $hChk = GUICtrlCreateCheckbox($sText, $xL + 50, $y, 800, 20)
+    Local $hChk = GUICtrlCreateCheckbox($sText, $xL + 50, $y, 800, 20,-1);,$WS_EX_TOPMOST)
+    GUICtrlSetOnEvent($hChk, "_OnModuleSelectionChanged")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     Return $hChk
 EndFunc
@@ -377,19 +406,20 @@ EndFunc
 ; ABA: CALENDARIOS (SV_CALENDARS)
 ;=============================================================================
 Func _CreateTabCalendars()
-    ; Descricao
-    GUICtrlCreateLabel("Calendarios de Trabalho (SV_CALENDARS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Work Calendars (SV_CALENDARS)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Um calendario define os horarios de trabalho de maquinas ou mao-de-obra. Cada linha representa um turno de trabalho de um dado calendario.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A calendar defines working hours for machines or labor. Each row represents one shift slot.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Days: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun   |   Times in HH:MM format", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    ; Botoes CRUD
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Cal_Add", "_Cal_Edit", "_Cal_Del", "_Cal_DelAll")
 
-    ; ListView
-    $g_hLV_Cal = GUICtrlCreateListView("ID Calendario|Nome Calendario|Dia Inicio|Hora Inicio|Dia Fim|Hora Fim|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_Cal = GUICtrlCreateListView("Calendar ID|Calendar name|Start day|Start time|End day|End time|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 0, 130)
@@ -398,11 +428,6 @@ Func _CreateTabCalendars()
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 3, 90)
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 4, 90)
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 5, 90)
-
-    ; Exemplo
-    GUICtrlCreateLabel("Exemplo: Cal_1x8 | Cal 1x8 | 1 (Seg) | 08:00 | 1 (Seg) | 17:00   |   Dias: 1=Seg, 2=Ter, ... 7=Dom", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleCalendars()
 EndFunc
@@ -432,25 +457,25 @@ EndFunc
 ; ABA: MAQUINAS (SV_MACHINE)
 ;=============================================================================
 Func _CreateTabMachines()
-    GUICtrlCreateLabel("Maquinas e Centros de Trabalho (SV_MACHINE)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Machines & Work Centers (SV_MACHINE)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Uma maquina e um recurso que executa operacoes. Maquinas pertencem a um unico Centro de Trabalho.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A machine is a resource that executes operations. Each machine belongs to a single work center (CT).", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("CT type: 2=Finite capacity | 4=Infinite capacity   |   Machine type: NR=Standard, BA=Batch, RN=Run, CU=Tank", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Mach_Add", "_Mach_Edit", "_Mach_Del", "_Mach_DelAll")
 
-    $g_hLV_Mach = GUICtrlCreateListView("Site ID|Site Nome|CT ID|CT Nome|Tipo CT|Secao ID|Secao Nome|Maq ID|Maq Nome|Tipo Maq|Cal ID|Cal Cap ID|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_Mach = GUICtrlCreateListView("Site ID|Site Name|CT ID|CT Name|CT Type|Section ID|Section Name|Machine ID|Machine Name|Mach Type|Cal ID|Cap Cal ID|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 11
         _GUICtrlListView_SetColumnWidth($g_hLV_Mach, $i, $COL_W - 30)
     Next
-
-    GUICtrlCreateLabel("Tipo CT: 2=Capacidade Finita | 4=Capacidade Infinita   |   Tipo Maq: NR=Standard, BA=Batch, RN=Run, CU=Tank", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleMachines()
 EndFunc
@@ -473,25 +498,25 @@ EndFunc
 ; ABA: OPERACOES (SV_OPERATIONS)
 ;=============================================================================
 Func _CreateTabOperations()
-    GUICtrlCreateLabel("Operacoes (SV_OPERATIONS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Operations (SV_OPERATIONS)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Uma operacao descreve um processo executado por uma maquina. Ex: Fresagem, Furadeira, Montagem.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("An operation describes a process executed by a machine (e.g., Milling, Drilling, Assembly).", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Unit: D=Days | H=Hours | C=Hundredths of an hour   |   Interruptible: 1=Yes, 0=No", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Ops_Add", "_Ops_Edit", "_Ops_Del", "_Ops_DelAll")
 
-    $g_hLV_Ops = GUICtrlCreateListView("ID Operacao|Nome Operacao|CT ID|Maq ID|Qtd Ref|Dur Ref|Unidade|Prep|T.Out|Interr.|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_Ops = GUICtrlCreateListView("Operation ID|Operation name|WC ID|Machine ID|Ref qty|Ref duration|Unit|Setup|Break|Interrupt|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 9
         _GUICtrlListView_SetColumnWidth($g_hLV_Ops, $i, $COL_W - 20)
     Next
-
-    GUICtrlCreateLabel("Unidade: J=Dias | H=Horas | C=Centesimos de hora   |   Interrompivel: 1=Sim, 0=Nao", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleOperations()
 EndFunc
@@ -513,16 +538,20 @@ EndFunc
 ; ABA: ROTEIROS (SV_ROUTINGS)
 ;=============================================================================
 Func _CreateTabRoutings()
-    GUICtrlCreateLabel("Roteiros de Producao (SV_ROUTINGS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Production Routings (SV_ROUTINGS)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Um roteiro descreve as etapas de um processo de fabricacao (sequencia de fases/operacoes).", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A routing describes the steps of a manufacturing process (sequence of phases/operations).", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Phase code: number (10, 20, 30...) that defines the operation sequence within the routing.", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Rout_Add", "_Rout_Edit", "_Rout_Del", "_Rout_DelAll")
 
-    $g_hLV_Rout = GUICtrlCreateListView("ID Roteiro|Nome Roteiro|Codigo Fase|ID Operacao|Nome Fase|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_Rout = GUICtrlCreateListView("Routing ID|Routing name|Phase code|Operation ID|Phase name|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 0, 160)
@@ -530,10 +559,6 @@ Func _CreateTabRoutings()
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 2, 110)
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 3, 160)
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 4, 250)
-
-    GUICtrlCreateLabel("Codigo Fase: numero (10, 20, 30...) que define a sequencia das operacoes no roteiro.", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleRoutings()
 EndFunc
@@ -557,16 +582,20 @@ EndFunc
 ; ABA: MATERIAIS (SV_MATERIALS)
 ;=============================================================================
 Func _CreateTabMaterials()
-    GUICtrlCreateLabel("Materiais (SV_MATERIALS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Items (SV_MATERIALS)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Um material e um produto que e usado ou produzido durante o processo de producao.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("An item is a product that is consumed or produced during the production process.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Type: MP=Raw material | SF=Semi-finished | PF=Finished good   |   Version: 00=standard, STD, SPT, etc.", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Mat_Add", "_Mat_Edit", "_Mat_Del", "_Mat_DelAll")
 
-    $g_hLV_Mat = GUICtrlCreateListView("ID Material|Nome Material|Tipo|Versao|ID Roteiro|Qtd Estoque|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_Mat = GUICtrlCreateListView("Item ID|Item name|Type|Version|Routing ID|On-hand qty|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 0, 150)
@@ -575,10 +604,6 @@ Func _CreateTabMaterials()
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 3, 80)
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 4, 150)
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 5, 110)
-
-    GUICtrlCreateLabel("Tipo: MP=Materia-Prima (entrada) | SF=Semi-Acabado (entrada/saida) | PF=Produto Acabado (saida)", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleMaterials()
 EndFunc
@@ -603,25 +628,25 @@ EndFunc
 ; ABA: BOM (SV_BOM)
 ;=============================================================================
 Func _CreateTabBOM()
-    GUICtrlCreateLabel("Lista de Materiais - BOM (SV_BOM)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Bill of Materials - BOM (SV_BOM)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("O BOM define a relacao entre o material pai e os materiais componentes necessarios para produzi-lo.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("The BOM defines which component items are required to produce a parent item.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Example: STD_Box | STD | STD_Axes | STD_GB | 10 | 1 | 1   (1 axis to produce 1 box in phase 10)", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_BOM_Add", "_BOM_Edit", "_BOM_Del", "_BOM_DelAll")
 
-    $g_hLV_BOM = GUICtrlCreateListView("Mat.Pai ID|Versao Pai|Mat.Comp ID|Roteiro ID|Fase|Qtd Ref|Qtd Necessaria|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_BOM = GUICtrlCreateListView("Parent item ID|Parent version|Component item ID|Routing ID|Phase|Ref qty|Required qty|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 6
         _GUICtrlListView_SetColumnWidth($g_hLV_BOM, $i, $COL_W)
     Next
-
-    GUICtrlCreateLabel("Exemplo: STD_Caixa | STD | STD_Eixos | STD_GB | 10 | 1 | 1   (1 eixo para fazer 1 caixa na fase 10)", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleBOM()
 EndFunc
@@ -644,16 +669,20 @@ EndFunc
 ; ABA: ORDENS DE PRODUCAO (SV_WO)
 ;=============================================================================
 Func _CreateTabWO()
-    GUICtrlCreateLabel("Ordens de Producao (SV_WO - Work Orders)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Work Orders (SV_WO)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Uma OP (WO) e uma ordem de producao com material, quantidade e data de entrega prevista.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A work order (WO) is a production order with item, quantity, and planned due date.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Date format: dd/mm/yyyy hh:mm   |   WO number must be unique", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_WO_Add", "_WO_Edit", "_WO_Del", "_WO_DelAll")
 
-    $g_hLV_WO = GUICtrlCreateListView("Num OP|Material ID|Roteiro|Versao|Qtd|Data Inicial|Data Final|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_WO = GUICtrlCreateListView("WO ID|Item ID|Routing|Version|Qty|Start date|End date|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 0, 120)
@@ -663,10 +692,6 @@ Func _CreateTabWO()
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 4, 80)
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 5, 140)
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 6, 140)
-
-    GUICtrlCreateLabel("Formato de data: dd/mm/aaaa hh:mm   |   Numero da OP deve ser unico", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleWOs()
 EndFunc
@@ -687,41 +712,45 @@ EndFunc
 ; ABA: WO LINKS
 ;=============================================================================
 Func _CreateTabWOLinks()
-    GUICtrlCreateLabel("Links entre OPs / Precedencias (SV_WO_LINKS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("WO / Operation Links - Precedence Constraints (SV_WO_LINKS)", $xL, 80, 700, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Um link e uma restricao de precedencia entre 2 OPs. Ex: OP2 so pode comecar depois que a fase 10 de OP1 terminar.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A link enforces a precedence constraint between two WOs/operations (e.g., WO2 starts only after phase 10 of WO1 ends).", $xL, 103, 950, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Link types: FS=Finish-Start | SS=Start-Start | FF=Finish-Finish | SF=Start-Finish", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_WOL_Add", "_WOL_Edit", "_WOL_Del", "_WOL_DelAll")
 
-    $g_hLV_WOL = GUICtrlCreateListView("OP Predecessor|Roteiro Pred|Fase Pred|OP Sucessor|Roteiro Suc|Fase Suc|Tipo Relacao|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_WOL = GUICtrlCreateListView("Predecessor WO|Pred routing|Pred phase|Successor WO|Succ routing|Succ phase|Link type|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 6
         _GUICtrlListView_SetColumnWidth($g_hLV_WOL, $i, $COL_W)
     Next
-
-    GUICtrlCreateLabel("Tipo Relacao: FS=Fim-Inicio | SS=Inicio-Inicio | FF=Fim-Fim | SF=Inicio-Fim", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 EndFunc
 
 ;=============================================================================
 ; ABA: RECURSOS SECUNDARIOS
 ;=============================================================================
 Func _CreateTabSecResources()
-    GUICtrlCreateLabel("Recursos Secundarios (SV_SEC_RESOURCES)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Secondary Resources (SV_SEC_RESOURCES)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Um recurso secundario e necessario durante uma operacao em complemento a maquina (ex: mao-de-obra).", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A secondary resource is required during an operation in addition to the primary machine (e.g., labor, tooling).", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Qualification ID identifies the type of labor or tool required. Capacity calendar controls availability.", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_SR_Add", "_SR_Edit", "_SR_Del", "_SR_DelAll")
 
-    $g_hLV_SR = GUICtrlCreateListView("ID Operacao|CT ID|Maq ID|ID Qualif.|ID Cal. Capacidade|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_SR = GUICtrlCreateListView("Operation ID|WC ID|Machine ID|Qualification ID|Capacity calendar ID|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 4
@@ -733,16 +762,20 @@ EndFunc
 ; ABA: CAPACIDADE
 ;=============================================================================
 Func _CreateTabCapacity()
-    GUICtrlCreateLabel("Calendarios de Capacidade (SV_CAPACITY)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Capacity Calendars (SV_CAPACITY)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Um calendario de capacidade define os turnos e o numero de recursos disponíveis para calculo de carga.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A capacity calendar defines shifts and the number of resources available for load calculation.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Days: 1=Mon ... 7=Sun   |   #Resources = number of concurrent resources available during that shift", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Cap_Add", "_Cap_Edit", "_Cap_Del", "_Cap_DelAll")
 
-    $g_hLV_Cap = GUICtrlCreateListView("ID Cal.Cap.|Dia Inicio|H.Inicio|Dia Fim|H.Fim|Num.Recursos|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_Cap = GUICtrlCreateListView("Cap cal ID|Start day|Start time|End day|End time|#Resources|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 5
@@ -754,16 +787,20 @@ EndFunc
 ; ABA: MOVIMENTACOES DE ESTOQUE
 ;=============================================================================
 Func _CreateTabStockMov()
-    GUICtrlCreateLabel("Movimentacoes de Estoque (SV_STOCK_MOVEMENTS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Inventory Movements (SV_STOCK_MOVEMENTS)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Uma movimentacao de estoque e uma entrada ou saida de material numa data definida.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("An inventory movement is an in/out transaction of an item on a given date.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Positive quantity = receipt; negative quantity = issue. Date format: dd/mm/yyyy", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Stk_Add", "_Stk_Edit", "_Stk_Del", "_Stk_DelAll")
 
-    $g_hLV_Stk = GUICtrlCreateListView("ID Material|Roteiro ID|Versao|Data Movim.|Quantidade|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_Stk = GUICtrlCreateListView("Item ID|Routing ID|Version|Move date|Quantity|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 4
@@ -775,39 +812,41 @@ EndFunc
 ; ABA: GERAR SQL
 ;=============================================================================
 Func _CreateTabSQL()
-    GUICtrlCreateLabel("Geracao e Execucao de SQL", 20, 80, 500, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("SQL Generation & Execution", $xL, 80, 500, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Clique em 'GERAR SQL' na barra inferior para visualizar o script. Depois 'EXECUTAR NO BANCO' para inserir.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("Click 'GENERATE SQL' in the bottom toolbar to build the script. Then click 'RUN ON DB' to execute it.", $xL, 103, 950, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
 
-    ; Opcoes de geracao
+    ; Options row (inline, no group box needed)
     Local $y = 128
-    GUICtrlCreateGroup("Opcoes", 20, $y, 400, 80)
-    Global $g_chkClearFirst = GUICtrlCreateCheckbox("Limpar dados existentes antes de inserir (DELETE FROM ...)", 35, $y + 22, 380, 20)
+    GUICtrlCreateGroup("Options", $xL, $y, 420, 68)
+    Global $g_chkClearFirst = GUICtrlCreateCheckbox("Clear existing data before insert (DELETE FROM ...)", $xL + 15, $y + 18, 390, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetState($g_chkClearFirst, $GUI_CHECKED)
-    Global $g_chkTransaction = GUICtrlCreateCheckbox("Usar transacao (rollback em caso de erro)", 35, $y + 44, 380, 20)
+    Global $g_chkTransaction = GUICtrlCreateCheckbox("Wrap in a transaction (auto ROLLBACK on error)", $xL + 15, $y + 40, 390, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetState($g_chkTransaction, $GUI_CHECKED)
 
-    ; Area do SQL gerado
-    $y = 218
-    GUICtrlCreateLabel("SQL Gerado:", 20, $y, 200, 18)
+    ; SQL editor
+    $y = 206
+    GUICtrlCreateLabel("Generated SQL:", $xL, $y, 200, 18)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
 
-    $g_hLog = GUICtrlCreateEdit("-- Clique em 'GERAR SQL' para visualizar as instrucoes SQL..." & @CRLF & _
-        "-- O SQL sera baseado nos dados inseridos nas abas anteriores.", _
-        20, $y + 22, $APP_WIDTH - 40, $APP_HEIGHT - 360, _
+    ; SQL box: height leaves room for exec log at the bottom (fixed 90px area)
+    $g_hLog = GUICtrlCreateEdit("-- Click 'GENERATE SQL' to build the script..." & @CRLF & _
+        "-- SQL is built from data entered in each tab.", _
+        $xL, $y + 20, $APP_WIDTH - 40, 300, _
         BitOR($ES_MULTILINE, $WS_VSCROLL, $WS_HSCROLL, $ES_READONLY, $ES_AUTOVSCROLL))
     GUICtrlSetFont(-1, 9, 400, 0, "Courier New")
     GUICtrlSetBkColor($g_hLog, 0x1E1E1E)
     GUICtrlSetColor($g_hLog, 0x00FF00)
 
-    ; Log de execucao
-    $y = $APP_HEIGHT - 130
-    GUICtrlCreateLabel("Log de Execucao:", 20, $y, 200, 18)
+    ; Execution log - placed after SQL box with fixed offset, well within tab area
+    $y = $y + 20 + 300 + 10
+    GUICtrlCreateLabel("Execution log:", $xL, $y, 200, 18)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
-    Global $g_hExecLog = GUICtrlCreateEdit("", 20, $y + 20, $APP_WIDTH - 40, 60, _
+    Global $g_hExecLog = GUICtrlCreateEdit("", $xL, $y + 20, $APP_WIDTH - 40, 55, _
         BitOR($ES_MULTILINE, $WS_VSCROLL, $ES_READONLY))
     GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
     GUICtrlSetBkColor($g_hExecLog, 0xFFFFF0)
@@ -817,26 +856,26 @@ EndFunc
 ; HELPER: BOTOES CRUD PADRAO
 ;=============================================================================
 Func _CreateCRUDButtons($y, $sAdd, $sEdit, $sDel, $sDelAll)
-    Local $btnAdd = GUICtrlCreateButton("+ Adicionar", 20, $y - 2, 110, 28)
+    Local $btnAdd = GUICtrlCreateButton("+ Add", 20, $y - 2, 110, 28)
     GUICtrlSetOnEvent($btnAdd, $sAdd)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
-    Local $btnEdit = GUICtrlCreateButton("Editar", 140, $y - 2, 90, 28)
+    Local $btnEdit = GUICtrlCreateButton("Edit", 140, $y - 2, 90, 28)
     GUICtrlSetOnEvent($btnEdit, $sEdit)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
-    Local $btnDel = GUICtrlCreateButton("- Remover", 240, $y - 2, 100, 28)
+    Local $btnDel = GUICtrlCreateButton("- Remove", 240, $y - 2, 100, 28)
     GUICtrlSetOnEvent($btnDel, $sDel)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
-    Local $btnDelAll = GUICtrlCreateButton("Limpar Tudo", 350, $y - 2, 105, 28)
+    Local $btnDelAll = GUICtrlCreateButton("Clear All", 350, $y - 2, 105, 28)
     GUICtrlSetOnEvent($btnDelAll, $sDelAll)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
-    Local $btnImp = GUICtrlCreateButton("Importar CSV...", 465, $y - 2, 120, 28)
+    Local $btnImp = GUICtrlCreateButton("Import CSV...", 465, $y - 2, 120, 28)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
-    Local $btnExp = GUICtrlCreateButton("Exportar CSV...", 595, $y - 2, 120, 28)
+    Local $btnExp = GUICtrlCreateButton("Export CSV...", 595, $y - 2, 120, 28)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 EndFunc
 
@@ -862,7 +901,7 @@ Func _ShowRowDialog($sTitle, $aFields, $aValues)
 
     Local $btnOK = GUICtrlCreateButton("OK", 200, $y + 10, 100, 30)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
-    Local $btnCancel = GUICtrlCreateButton("Cancelar", 310, $y + 10, 100, 30)
+    Local $btnCancel = GUICtrlCreateButton("Cancel", 310, $y + 10, 100, 30)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
     GUISetState(@SW_SHOW, $hDlg)
@@ -892,9 +931,9 @@ EndFunc
 ; HANDLERS DE EVENTOS - CRUD CALENDARIOS
 ;=============================================================================
 Func _Cal_Add()
-    Local $aFields[] = ["ID Calendario (sem espacos)", "Nome Calendario", "Dia Inicio (1=Seg..7=Dom)", "Hora Inicio (HH:MM)", "Dia Fim (1=Seg..7=Dom)", "Hora Fim (HH:MM)"]
+    Local $aFields[] = ["Calendar ID (no spaces)", "Calendar name", "Start day (1=Mon..7=Sun)", "Start time (HH:MM)", "End day (1=Mon..7=Sun)", "End time (HH:MM)"]
     Local $aVals[] = ["Cal_1x8", "Cal 1x8", "1", "08:00", "1", "17:00"]
-    Local $aResult = _ShowRowDialog("Adicionar Calendario", $aFields, $aVals)
+    Local $aResult = _ShowRowDialog("Add calendar", $aFields, $aVals)
     If IsArray($aResult) Then
         _AddCalendar($aResult[0], $aResult[1], $aResult[2], $aResult[3], $aResult[4], $aResult[5])
     EndIf
@@ -913,9 +952,9 @@ EndFunc
 ; HANDLERS - MAQUINAS
 ;=============================================================================
 Func _Mach_Add()
-    Local $aFields[] = ["Site ID", "Site Nome", "CT ID (sem espacos)", "CT Nome", "Tipo CT (2=Finito/4=Infinito)", "Secao ID", "Secao Nome", "Maquina ID", "Maquina Nome", "Tipo Maquina (NR/BA/RN/CU)", "Cal. Abertura ID", "Cal. Capacidade ID"]
+    Local $aFields[] = ["Site ID", "Site Nome", "CT ID (sem espacos)", "CT Nome", "Tipo CT (2=Finito/4=Infinito)", "Secao ID", "Secao Nome", "Machine ID", "Machine name", "Machine type (NR/BA/RN/CU)", "Cal. Abertura ID", "Capacity calendar ID"]
     Local $aVals[] = ["LYON","LYON","Milling","Fresagem","2","Sec_A","Secao A","Milling_1","Fresagem 1","NR","Cal_1x8","Cal_1x8"]
-    Local $aResult = _ShowRowDialog("Adicionar Maquina", $aFields, $aVals)
+    Local $aResult = _ShowRowDialog("Add machine", $aFields, $aVals)
     If IsArray($aResult) Then
         _AddMachine($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5],$aResult[6],$aResult[7],$aResult[8],$aResult[9],$aResult[10],$aResult[11])
     EndIf
@@ -933,8 +972,8 @@ EndFunc
 ; HANDLERS - OPERACOES
 ;=============================================================================
 Func _Ops_Add()
-    Local $aFields[] = ["ID Operacao","Nome Operacao","CT ID","Maquina ID","Qtd Referencia","Dur Referencia","Unidade (J/H/C)","Prep (HH)","Time Out (HH)","Interrompivel (1/0)"]
-    Local $aResult = _ShowRowDialog("Adicionar Operacao", $aFields, 0)
+    Local $aFields[] = ["Operation ID","Operation name","CT ID","Machine ID","Qtd Referencia","Dur Referencia","Unidade (J/H/C)","Prep (HH)","Time Out (HH)","Interruptible (1/0)"]
+    Local $aResult = _ShowRowDialog("Add operation", $aFields, 0)
     If IsArray($aResult) Then _AddOperation($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5],$aResult[6],$aResult[7],$aResult[8],$aResult[9])
 EndFunc
 Func _Ops_Edit()
@@ -950,8 +989,8 @@ EndFunc
 ; HANDLERS - ROTEIROS
 ;=============================================================================
 Func _Rout_Add()
-    Local $aFields[] = ["ID Roteiro","Nome Roteiro","Codigo Fase (10,20,...)","ID Operacao","Nome Fase"]
-    Local $aResult = _ShowRowDialog("Adicionar Roteiro", $aFields, 0)
+    Local $aFields[] = ["Routing ID","Routing name","Codigo Fase (10,20,...)","Operation ID","Nome Fase"]
+    Local $aResult = _ShowRowDialog("Add routing", $aFields, 0)
     If IsArray($aResult) Then _AddRouting($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4])
 EndFunc
 Func _Rout_Edit()
@@ -967,8 +1006,8 @@ EndFunc
 ; HANDLERS - MATERIAIS
 ;=============================================================================
 Func _Mat_Add()
-    Local $aFields[] = ["ID Material","Nome Material","Tipo (MP/SF/PF)","Versao","ID Roteiro","Qtd Estoque"]
-    Local $aResult = _ShowRowDialog("Adicionar Material", $aFields, 0)
+    Local $aFields[] = ["Item ID","Item name","Tipo (MP/SF/PF)","Versao","Routing ID","On-hand qty"]
+    Local $aResult = _ShowRowDialog("Add item", $aFields, 0)
     If IsArray($aResult) Then _AddMaterial($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5])
 EndFunc
 Func _Mat_Edit()
@@ -984,8 +1023,8 @@ EndFunc
 ; HANDLERS - BOM
 ;=============================================================================
 Func _BOM_Add()
-    Local $aFields[] = ["ID Material Pai","Versao Pai","ID Material Componente","ID Roteiro","Codigo Fase","Qtd Referencia","Qtd Necessaria"]
-    Local $aResult = _ShowRowDialog("Adicionar BOM", $aFields, 0)
+    Local $aFields[] = ["Parent item ID","Versao Pai","Component item ID","Routing ID","Codigo Fase","Qtd Referencia","Qtd Necessaria"]
+    Local $aResult = _ShowRowDialog("Add BOM row", $aFields, 0)
     If IsArray($aResult) Then _AddBOM($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5],$aResult[6])
 EndFunc
 Func _BOM_Edit()
@@ -1001,8 +1040,8 @@ EndFunc
 ; HANDLERS - WO
 ;=============================================================================
 Func _WO_Add()
-    Local $aFields[] = ["Numero OP","ID Material","ID Roteiro","Versao","Quantidade","Data Inicio (dd/mm/aaaa hh:mm)","Data Fim (dd/mm/aaaa hh:mm)"]
-    Local $aResult = _ShowRowDialog("Adicionar Ordem de Producao", $aFields, 0)
+    Local $aFields[] = ["Numero OP","Item ID","Routing ID","Versao","Quantidade","Data Inicio (dd/mm/aaaa hh:mm)","Data Fim (dd/mm/aaaa hh:mm)"]
+    Local $aResult = _ShowRowDialog("Add work order", $aFields, 0)
     If IsArray($aResult) Then _AddWO($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5],$aResult[6])
 EndFunc
 Func _WO_Edit()
@@ -1018,8 +1057,8 @@ EndFunc
 ; HANDLERS - WO LINKS
 ;=============================================================================
 Func _WOL_Add()
-    Local $aFields[] = ["OP Predecessor","Roteiro Pred","Fase Pred","OP Sucessor","Roteiro Suc","Fase Suc","Tipo Relacao (FS/SS/FF)"]
-    Local $aResult = _ShowRowDialog("Adicionar Link WO", $aFields, 0)
+    Local $aFields[] = ["OP Predecessor","Pred routing","Fase Pred","OP Sucessor","Succ routing","Fase Suc","Link type (FS/SS/FF)"]
+    Local $aResult = _ShowRowDialog("Add WO link", $aFields, 0)
     If IsArray($aResult) Then GUICtrlCreateListViewItem($aResult[0] & "|" & $aResult[1] & "|" & $aResult[2] & "|" & $aResult[3] & "|" & $aResult[4] & "|" & $aResult[5] & "|" & $aResult[6], $g_hLV_WOL)
 EndFunc
 Func _WOL_Edit()
@@ -1035,8 +1074,8 @@ EndFunc
 ; HANDLERS - RECURSOS SECUNDARIOS
 ;=============================================================================
 Func _SR_Add()
-    Local $aFields[] = ["ID Operacao","CT ID","Maquina ID","ID Qualificacao","ID Cal. Capacidade"]
-    Local $aResult = _ShowRowDialog("Adicionar Recurso Secundario", $aFields, 0)
+    Local $aFields[] = ["Operation ID","CT ID","Machine ID","Qualification ID","Capacity calendar ID"]
+    Local $aResult = _ShowRowDialog("Add secondary resource", $aFields, 0)
     If IsArray($aResult) Then GUICtrlCreateListViewItem($aResult[0] & "|" & $aResult[1] & "|" & $aResult[2] & "|" & $aResult[3] & "|" & $aResult[4], $g_hLV_SR)
 EndFunc
 Func _SR_Edit()
@@ -1052,8 +1091,8 @@ EndFunc
 ; HANDLERS - CAPACIDADE
 ;=============================================================================
 Func _Cap_Add()
-    Local $aFields[] = ["ID Cal. Capacidade","Dia Inicio (1-7)","Hora Inicio (HH:MM)","Dia Fim (1-7)","Hora Fim (HH:MM)","Num. Recursos"]
-    Local $aResult = _ShowRowDialog("Adicionar Calendario de Capacidade", $aFields, 0)
+    Local $aFields[] = ["Capacity calendar ID","Dia Inicio (1-7)","Start time (HH:MM)","Dia Fim (1-7)","End time (HH:MM)","Resource count"]
+    Local $aResult = _ShowRowDialog("Add capacity calendar", $aFields, 0)
     If IsArray($aResult) Then GUICtrlCreateListViewItem($aResult[0] & "|" & $aResult[1] & "|" & $aResult[2] & "|" & $aResult[3] & "|" & $aResult[4] & "|" & $aResult[5], $g_hLV_Cap)
 EndFunc
 Func _Cap_Edit()
@@ -1069,8 +1108,8 @@ EndFunc
 ; HANDLERS - ESTOQUE
 ;=============================================================================
 Func _Stk_Add()
-    Local $aFields[] = ["ID Material","ID Roteiro","Versao","Data Movimentacao (dd/mm/aaaa)","Quantidade"]
-    Local $aResult = _ShowRowDialog("Adicionar Movimentacao de Estoque", $aFields, 0)
+    Local $aFields[] = ["Item ID","Routing ID","Versao","Movement date (dd/mm/yyyy)","Quantidade"]
+    Local $aResult = _ShowRowDialog("Add inventory movement", $aFields, 0)
     If IsArray($aResult) Then GUICtrlCreateListViewItem($aResult[0] & "|" & $aResult[1] & "|" & $aResult[2] & "|" & $aResult[3] & "|" & $aResult[4], $g_hLV_Stk)
 EndFunc
 Func _Stk_Edit()
@@ -1091,7 +1130,7 @@ Func _TestConnection()
     Local $sAuth  = GUICtrlRead($g_cmbAuth)
 
     If $g_sServer = "" Or $g_sDatabase = "" Then
-        MsgBox(48, "Erro", "Servidor e Banco de dados sao obrigatorios.")
+        MsgBox(48, "Error", "Server and database are required.")
         Return
     EndIf
 
@@ -1106,9 +1145,9 @@ Func _TestConnection()
     ; Testa conexao via ADO
     Local $oConn = ObjCreate("ADODB.Connection")
     If Not IsObj($oConn) Then
-        GUICtrlSetData($g_lblStatus, "Erro: ADO nao disponivel")
+        GUICtrlSetData($g_lblStatus, "Error: ADO not available")
         GUICtrlSetColor($g_lblStatus, 0xCC0000)
-        MsgBox(16, "Erro", "Nao foi possivel criar objeto ADODB.Connection." & @CRLF & "Verifique se o driver ODBC SQL Server esta instalado.")
+        MsgBox(16, "Error", "Could not create ADODB.Connection." & @CRLF & "Check that the SQL Server ODBC / OLE DB provider is installed.")
         Return
     EndIf
 
@@ -1124,19 +1163,21 @@ Func _TestConnection()
         $bOK = True
         $oConn.Close()
     Else
-        $sErr = "Nao foi possivel abrir a conexao."
+        $sErr = "Could not open the connection."
     EndIf
 
     If $bOK Then
         $g_bConnected = True
-        GUICtrlSetData($g_lblStatus, "Conectado: " & $g_sDatabase & "@" & $g_sServer)
+		MsgBox(262144,"","Connected: " & $g_sDatabase & "@" & $g_sServer)
+        GUICtrlSetData($g_lblStatus, "Connected: " & $g_sDatabase & "@" & $g_sServer)
         GUICtrlSetColor($g_lblStatus, 0x007700)
-        MsgBox(64, "Conexao", "Conexao com o banco estabelecida com sucesso!" & @CRLF & @CRLF & "Banco: " & $g_sDatabase & @CRLF & "Servidor: " & $g_sServer)
+        _SaveSettings()   ; persist server + database immediately
+        MsgBox(64, "Connection", "Successfully connected to the database!" & @CRLF & @CRLF & "Database: " & $g_sDatabase & @CRLF & "Server: " & $g_sServer)
     Else
         $g_bConnected = False
-        GUICtrlSetData($g_lblStatus, "Erro de conexao")
+        GUICtrlSetData($g_lblStatus, "Connection error")
         GUICtrlSetColor($g_lblStatus, 0xCC0000)
-        MsgBox(16, "Erro de Conexao", "Nao foi possivel conectar ao banco de dados." & @CRLF & @CRLF & $sErr & @CRLF & @CRLF & "String de conexao usada:" & @CRLF & $g_sConnStr)
+        MsgBox(16, "Connection error", "Could not connect to the database." & @CRLF & @CRLF & $sErr & @CRLF & @CRLF & "Connection string used:" & @CRLF & $g_sConnStr)
     EndIf
 EndFunc
 
@@ -1155,25 +1196,7 @@ EndFunc
 ; APLICAR MODULOS
 ;=============================================================================
 Func _ApplyModules()
-    $g_bModPS    = (GUICtrlRead($g_rbPS) = $GUI_CHECKED)
-    $g_bModMP    = Not $g_bModPS
-    $g_bModSRP   = (GUICtrlRead($g_chkSRP) = $GUI_CHECKED)
-    $g_bModWOL   = (GUICtrlRead($g_chkWOL) = $GUI_CHECKED)
-    $g_bModCROUT = (GUICtrlRead($g_chkCROUT) = $GUI_CHECKED)
-    $g_bModSR    = (GUICtrlRead($g_chkSR) = $GUI_CHECKED)
-    $g_bModBATCH = (GUICtrlRead($g_chkBATCH) = $GUI_CHECKED)
-    $g_bModINV   = (GUICtrlRead($g_chkINV) = $GUI_CHECKED)
-    $g_bModMRK   = (GUICtrlRead($g_chkMRK) = $GUI_CHECKED)
-    $g_bModLR    = (GUICtrlRead($g_chkLR) = $GUI_CHECKED)
-    $g_bModPRM   = (GUICtrlRead($g_chkPRM) = $GUI_CHECKED)
-
-    Local $sModulos = "Modulos selecionados: " & ($g_bModPS ? "PS " : "MP ") & _
-        ($g_bModSRP ? "SRP " : "") & ($g_bModWOL ? "WO-Links " : "") & _
-        ($g_bModSR ? "Rec.Sec. " : "") & ($g_bModINV ? "Estoque " : "") & _
-        ($g_bModLR ? "Rec.Lim. " : "") & ($g_bModPRM ? "Param. " : "") & _
-        ($g_bModBATCH ? "Batch " : "") & ($g_bModCROUT ? "Rot.Compl. " : "")
-
-    MsgBox(64, "Modulos Aplicados", $sModulos & @CRLF & @CRLF & "As abas de dados foram atualizadas conforme os modulos selecionados." & @CRLF & "Preencha os dados e clique em 'GERAR SQL'.")
+    _RefreshModuleFlags(False)
 EndFunc
 
 ;=============================================================================
@@ -1185,9 +1208,9 @@ Func _GenerateSQL()
     Local $bTrans = (GUICtrlRead($g_chkTransaction) = $GUI_CHECKED)
 
     $sSQL &= "-- =============================================" & @CRLF
-    $sSQL &= "-- ORTEMS TOOLBOX - SQL de Importacao" & @CRLF
+    $sSQL &= "-- ORTEMS TOOLBOX - Import SQL" & @CRLF
     $sSQL &= "-- Gerado em: " & @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & @CRLF
-    $sSQL &= "-- Banco: " & GUICtrlRead($g_edtDatabase) & @CRLF
+    $sSQL &= "-- Database: " & GUICtrlRead($g_edtDatabase) & @CRLF
     $sSQL &= "-- =============================================" & @CRLF & @CRLF
 
     If $bTrans Then $sSQL &= "BEGIN TRANSACTION;" & @CRLF & @CRLF
@@ -1240,7 +1263,7 @@ Func _GenerateSQL()
     $sSQL &= @CRLF & "-- ===== FIM DO SCRIPT =====" & @CRLF
 
     GUICtrlSetData($g_hLog, $sSQL)
-    _Log("SQL gerado com sucesso. " & StringLen($sSQL) & " caracteres.")
+    _Log("SQL generated successfully. " & StringLen($sSQL) & " caracteres.")
 
     ; Mudar para a aba SQL
     GUICtrlSetState($g_hTab, $g_iTabSQL)
@@ -1445,33 +1468,33 @@ EndFunc
 ;=============================================================================
 Func _ExecuteSQL()
     If Not $g_bConnected Then
-        MsgBox(48, "Aviso", "Voce nao esta conectado ao banco de dados." & @CRLF & "Va para a aba '1. Banco de Dados' e teste a conexao primeiro.")
+        MsgBox(48, "Warning", "You are not connected to the database." & @CRLF & "Go to the '1. Database' tab and test the connection first.")
         Return
     EndIf
 
     Local $sSQL = GUICtrlRead($g_hLog)
     If $sSQL = "" Or StringInStr($sSQL, "INSERT") = 0 Then
-        MsgBox(48, "Aviso", "Nenhum SQL gerado ainda. Clique em 'GERAR SQL' primeiro.")
+        MsgBox(48, "Warning", "No SQL has been generated yet. Click 'GENERATE SQL' first.")
         Return
     EndIf
 
-    Local $nRet = MsgBox(4 + 48, "Confirmar Execucao", _
-        "Voce esta prestes a executar o SQL no banco:" & @CRLF & @CRLF & _
-        "Banco: " & $g_sDatabase & @CRLF & "Servidor: " & $g_sServer & @CRLF & @CRLF & _
-        "Esta acao pode DELETAR e RECRIAR dados existentes!" & @CRLF & @CRLF & _
-        "Deseja continuar?")
+    Local $nRet = MsgBox(4 + 48, "Confirm execution", _
+        "You are about to run SQL on the database:" & @CRLF & @CRLF & _
+        "Database: " & $g_sDatabase & @CRLF & "Servidor: " & $g_sServer & @CRLF & @CRLF & _
+        "This action can DELETE and RECREATE existing data!" & @CRLF & @CRLF & _
+        "Do you want to continue?")
 
     If $nRet <> 6 Then Return  ; 6 = Yes
 
     Local $oConn = ObjCreate("ADODB.Connection")
     If Not IsObj($oConn) Then
-        _Log("ERRO: Nao foi possivel criar objeto de conexao.")
+        _Log("ERROR: Could not create the connection object.")
         Return
     EndIf
 
     $oConn.Open($g_sConnStr)
     If $oConn.State <> 1 Then
-        _Log("ERRO: Nao foi possivel abrir conexao.")
+        _Log("ERROR: Could not open the connection.")
         Return
     EndIf
 
@@ -1486,15 +1509,15 @@ Func _ExecuteSQL()
         $oConn.Execute($sStmt)
         If @error Then
             $nErr += 1
-            _Log("ERRO na instrucao " & $i & ": " & $sStmt)
+            _Log("ERROR in statement " & $i & ": " & $sStmt)
         Else
             $nOK += 1
         EndIf
     Next
 
     $oConn.Close()
-    _Log("Execucao concluida: " & $nOK & " instrucoes OK, " & $nErr & " erros.")
-    MsgBox(64, "Resultado", "SQL executado no banco!" & @CRLF & @CRLF & $nOK & " instrucoes executadas com sucesso." & @CRLF & ($nErr > 0 ? $nErr & " erros encontrados (verifique o log)." : "Sem erros!"))
+    _Log("Execucao concluida: " & $nOK & " statements OK, " & $nErr & " errors.")
+    MsgBox(64, "Resultado", "SQL executed successfully on the database!" & @CRLF & @CRLF & $nOK & " statements executed successfully." & @CRLF & ($nErr > 0 ? $nErr & " errors found (check the log)." : "No errors!"))
 EndFunc
 
 ;=============================================================================
@@ -1502,21 +1525,21 @@ EndFunc
 ;=============================================================================
 Func _ClearDatabase()
     If Not $g_bConnected Then
-        MsgBox(48, "Aviso", "Nao conectado ao banco de dados.")
+        MsgBox(48, "Warning", "Not connected to the database.")
         Return
     EndIf
 
-    Local $nRet = MsgBox(4 + 16, "Confirmar Limpeza", _
-        "ATENCAO: Esta acao vai DELETAR TODOS OS DADOS de demo do banco!" & @CRLF & @CRLF & _
-        "Banco: " & $g_sDatabase & @CRLF & @CRLF & "Deseja continuar?")
+    Local $nRet = MsgBox(4 + 16, "Confirm clear", _
+        "WARNING: This action will DELETE ALL demo data from the database!" & @CRLF & @CRLF & _
+        "Database: " & $g_sDatabase & @CRLF & @CRLF & "Do you want to continue?")
 
     If $nRet = 6 Then
         Local $oConn = ObjCreate("ADODB.Connection")
         $oConn.Open($g_sConnStr)
         $oConn.Execute(_GetClearSQL())
         $oConn.Close()
-        _Log("Banco limpo com sucesso.")
-        MsgBox(64, "OK", "Dados de demo removidos do banco com sucesso.")
+        _Log("Database cleared successfully.")
+        MsgBox(64, "OK", "Demo data removed from the database successfully.")
     EndIf
 EndFunc
 
@@ -1524,23 +1547,23 @@ EndFunc
 ; IMPORTAR / EXPORTAR EXCEL
 ;=============================================================================
 Func _ImportExcel()
-    Local $sFile = FileOpenDialog("Selecionar arquivo Excel/CSV", @WorkingDir, "Excel/CSV (*.xlsx;*.xlsm;*.csv)|Todos (*.*)")
+    Local $sFile = FileOpenDialog("Select Excel/CSV file", @WorkingDir, "Excel/CSV (*.xlsx;*.xlsm;*.csv)|Todos (*.*)")
     If $sFile = "" Then Return
 
     If StringRight($sFile, 4) = ".csv" Then
         _Log("Importando CSV: " & $sFile)
-        MsgBox(64, "Importar", "Importacao de CSV implementada. Arquivo: " & $sFile & @CRLF & "Selecione a aba destino correspondente.")
+        MsgBox(64, "Import", "CSV import not implemented yet. File: " & $sFile & @CRLF & "Select the corresponding target tab.")
     Else
-        MsgBox(64, "Importar Excel", "Para importar do Excel Toolbox original:" & @CRLF & @CRLF & _
-            "1. Abra o arquivo: " & $sFile & @CRLF & _
-            "2. Exporte cada aba SV_ como CSV" & @CRLF & _
-            "3. Use a opcao 'Importar CSV' nas abas individuais" & @CRLF & @CRLF & _
+        MsgBox(64, "Import Excel", "Para importar do Excel Toolbox original:" & @CRLF & @CRLF & _
+            "1. Open the file: " & $sFile & @CRLF & _
+            "2. Export each SV_ tab as CSV" & @CRLF & _
+            "3. Use 'Import CSV' in each data tab if needed" & @CRLF & @CRLF & _
             "(Suporte nativo a .xlsm requer Microsoft Excel instalado)")
     EndIf
 EndFunc
 
 Func _ExportExcel()
-    Local $sSaveFile = FileSaveDialog("Exportar dados", @WorkingDir, "CSV (*.csv)|Todos (*.*)", 16, "ortems_demo_export.csv")
+    Local $sSaveFile = FileSaveDialog("Export data", @WorkingDir, "CSV (*.csv)|Todos (*.*)", 16, "ortems_demo_export.csv")
     If $sSaveFile = "" Then Return
 
     Local $sCSV = ""
@@ -1552,21 +1575,21 @@ Func _ExportExcel()
     Next
 
     FileWrite($sSaveFile, $sCSV)
-    _Log("Dados exportados para: " & $sSaveFile)
-    MsgBox(64, "Exportar", "Dados exportados com sucesso para:" & @CRLF & $sSaveFile)
+    _Log("Data exported to: " & $sSaveFile)
+    MsgBox(64, "Export", "Data exported successfully to:" & @CRLF & $sSaveFile)
 EndFunc
 
 Func _SaveSQL()
     Local $sSQL = GUICtrlRead($g_hLog)
     If $sSQL = "" Then
-        MsgBox(48, "Aviso", "Nenhum SQL para salvar. Clique em 'GERAR SQL' primeiro.")
+        MsgBox(48, "Warning", "No SQL to save. Click 'GENERATE SQL' first.")
         Return
     EndIf
-    Local $sFile = FileSaveDialog("Salvar SQL", @WorkingDir, "SQL (*.sql)|Todos (*.*)", 16, "ortems_demo.sql")
+    Local $sFile = FileSaveDialog("Save SQL", @WorkingDir, "SQL (*.sql)|Todos (*.*)", 16, "ortems_demo.sql")
     If $sFile <> "" Then
         FileWrite($sFile, $sSQL)
-        _Log("SQL salvo em: " & $sFile)
-        MsgBox(64, "Salvo", "SQL salvo com sucesso em:" & @CRLF & $sFile)
+        _Log("SQL saved to: " & $sFile)
+        MsgBox(64, "Salvo", "SQL saved successfully to:" & @CRLF & $sFile)
     EndIf
 EndFunc
 
@@ -1581,7 +1604,393 @@ EndFunc
 ;=============================================================================
 ; FECHAR
 ;=============================================================================
+
+;=============================================================================
+; UI: MODULE SELECTION -> ENABLE/DISABLE TABS (real-time)
+;=============================================================================
+Func _OnModuleSelectionChanged()
+;~     _RefreshModuleFlags(True)
+EndFunc
+
+Func _RefreshModuleFlags($bSilent = True)
+    ; Read UI state
+    If IsDeclared("g_rbPS") Then
+        $g_bModPS = (GUICtrlRead($g_rbPS) = $GUI_CHECKED)
+        $g_bModMP = Not $g_bModPS
+    EndIf
+
+    If IsDeclared("g_chkSRP") Then $g_bModSRP   = (GUICtrlRead($g_chkSRP)   = $GUI_CHECKED)
+    If IsDeclared("g_chkWOL") Then $g_bModWOL   = (GUICtrlRead($g_chkWOL)   = $GUI_CHECKED)
+    If IsDeclared("g_chkSR")  Then $g_bModSR    = (GUICtrlRead($g_chkSR)    = $GUI_CHECKED)
+    If IsDeclared("g_chkINV") Then $g_bModINV   = (GUICtrlRead($g_chkINV)   = $GUI_CHECKED)
+    If IsDeclared("g_chkLR")  Then $g_bModLR    = (GUICtrlRead($g_chkLR)    = $GUI_CHECKED)
+    If IsDeclared("g_chkPRM") Then $g_bModPRM   = (GUICtrlRead($g_chkPRM)   = $GUI_CHECKED)
+    If IsDeclared("g_chkMRK") Then $g_bModMRK   = (GUICtrlRead($g_chkMRK)   = $GUI_CHECKED)
+    If IsDeclared("g_chkBATCH") Then $g_bModBATCH = (GUICtrlRead($g_chkBATCH) = $GUI_CHECKED)
+    If IsDeclared("g_chkCROUT") Then $g_bModCROUT = (GUICtrlRead($g_chkCROUT) = $GUI_CHECKED)
+
+    ; Enforce compatibility: WO Links + Secondary Resources require PS
+    If $g_bModMP Then
+        If IsDeclared("g_chkWOL") Then
+            GUICtrlSetState($g_chkWOL, $GUI_UNCHECKED)
+            GUICtrlSetState($g_chkWOL, $GUI_DISABLE)
+        EndIf
+        If IsDeclared("g_chkSR") Then
+            GUICtrlSetState($g_chkSR, $GUI_UNCHECKED)
+            GUICtrlSetState($g_chkSR, $GUI_DISABLE)
+        EndIf
+        $g_bModWOL = False
+        $g_bModSR  = False
+    Else
+        If IsDeclared("g_chkWOL") Then GUICtrlSetState($g_chkWOL, $GUI_ENABLE)
+        If IsDeclared("g_chkSR") Then GUICtrlSetState($g_chkSR, $GUI_ENABLE)
+    EndIf
+
+    _UpdateTabAvailability()
+
+    _SaveSettings()   ; persist module selections automatically
+
+    If Not $bSilent Then
+        Local $sMode = ($g_bModPS ? "PS" : "MP")
+        Local $sMods = ""
+        If $g_bModSRP Then $sMods &= " SRP"
+        If $g_bModWOL Then $sMods &= " WO-LINKS"
+        If $g_bModSR  Then $sMods &= " SEC-RES"
+        If $g_bModINV Then $sMods &= " INVENTORY"
+        If $g_bModLR  Then $sMods &= " LIM-RES"
+        If $g_bModPRM Then $sMods &= " PARAMETERS"
+        If $g_bModBATCH Then $sMods &= " BATCH"
+        If $g_bModCROUT Then $sMods &= " COMPLEX-ROUT"
+        If $sMods = "" Then $sMods = " (none)"
+
+        MsgBox(64, "Modules applied", "Mode: " & $sMode & @CRLF & "Enabled modules:" & $sMods & @CRLF & @CRLF & _
+            "The data tabs have been enabled/disabled according to your selections.")
+    EndIf
+EndFunc
+
+Func _UpdateTabAvailability()
+    If $g_hTabHandle = 0 Then Return
+
+    Local $hTab = $g_hTabHandle
+    Local $bPS = $g_bModPS
+    Local $bMP = $g_bModMP
+
+    ; Core tabs (always enabled)
+    Local $bCal  = True
+    Local $bMach = True
+    Local $bMat  = True
+
+    ; Optional / mode-dependent tabs
+    Local $bOps  = $bPS
+    Local $bRout = $bPS
+    Local $bBOM  = ($g_bModSRP Or $bMP)
+    Local $bWO   = $bPS
+    Local $bWOL  = ($bPS And $g_bModWOL)
+    Local $bSR   = ($bPS And $g_bModSR)
+    Local $bCap  = ($g_bModLR Or $bMP)
+    Local $bStk  = $g_bModINV
+
+    _GUICtrlTab_EnableTab($hTab, $g_iTabCal,  $bCal)
+    _GUICtrlTab_EnableTab($hTab, $g_iTabMach, $bMach)
+    _GUICtrlTab_EnableTab($hTab, $g_iTabOps,  $bOps)
+    _GUICtrlTab_EnableTab($hTab, $g_iTabRout, $bRout)
+    _GUICtrlTab_EnableTab($hTab, $g_iTabMat,  $bMat)
+    _GUICtrlTab_EnableTab($hTab, $g_iTabBOM,  $bBOM)
+    _GUICtrlTab_EnableTab($hTab, $g_iTabWO,   $bWO)
+    _GUICtrlTab_EnableTab($hTab, $g_iTabWOL,  $bWOL)
+    _GUICtrlTab_EnableTab($hTab, $g_iTabSR,   $bSR)
+    _GUICtrlTab_EnableTab($hTab, $g_iTabCap,  $bCap)
+    _GUICtrlTab_EnableTab($hTab, $g_iTabStk,  $bStk)
+
+    ; If the currently visible tab just became disabled, bounce back to Modules
+    Local $iCur = _GUICtrlTab_GetCurSel($hTab)
+    If Not _TabIsEnabled($iCur) Then
+        $g_bAllowProgrammaticTabChange = True
+        _GUICtrlTab_SetCurSel($hTab, $g_iTabMod)
+        $g_bAllowProgrammaticTabChange = False
+    EndIf
+
+    ; Force a full repaint so AutoIt re-draws all tab child controls correctly.
+    ; Without this, any TCM_SETITEM call above leaves controls visually stale
+    ; (blank until mouse-over triggers a WM_PAINT).
+    DllCall("user32.dll", "bool", "RedrawWindow", "hwnd", $g_hMain, "ptr", 0, "ptr", 0, "uint", 0x0185)
+    ; 0x0185 = RDW_INVALIDATE(0x01) | RDW_ERASE(0x04) | RDW_ALLCHILDREN(0x80) | RDW_UPDATENOW(0x100)
+EndFunc
+;=============================================================================
+; TAB: Enable/disable emulation
+; Tab control items cannot be truly disabled in standard Win32.
+; We emulate this by (1) marking the caption with ' (off)' and (2) blocking
+; selection changes via WM_NOTIFY/TCN_SELCHANGING.
+;=============================================================================
+Func _InitTabState()
+    If $g_hTabHandle = 0 Then Return
+    Local $hTab = $g_hTabHandle
+    Local $cnt = _GUICtrlTab_GetItemCount($hTab)
+    If $cnt <= 0 Then Return
+    ReDim $g_aTabEnabled[$cnt]
+    ReDim $g_aTabBaseText[$cnt]
+    For $i = 0 To $cnt - 1
+        $g_aTabEnabled[$i] = True
+        $g_aTabBaseText[$i] = _GUICtrlTab_GetItemText($hTab, $i)
+    Next
+EndFunc
+
+Func _GUICtrlTab_EnableTab($hTab, $iIndex, $bEnable)
+    If $hTab = 0 Then Return
+    If $iIndex < 0 Then Return
+    If UBound($g_aTabEnabled) = 0 Then _InitTabState()
+    If $iIndex >= UBound($g_aTabEnabled) Then Return
+
+    Local $bNewState = ($bEnable <> 0)
+
+    ; Skip if state has not changed — avoids TCM_SETITEM redraw that wipes tab controls
+    If $g_aTabEnabled[$iIndex] = $bNewState Then Return
+
+    $g_aTabEnabled[$iIndex] = $bNewState
+
+    Local $sBase = $g_aTabBaseText[$iIndex]
+    If $sBase = "" Then $sBase = _GUICtrlTab_GetItemText($hTab, $iIndex)
+
+    If Not $g_aTabEnabled[$iIndex] Then
+        _GUICtrlTab_SetItemText($hTab, $iIndex, $sBase & " [off]")
+    Else
+        _GUICtrlTab_SetItemText($hTab, $iIndex, $sBase)
+    EndIf
+EndFunc
+
+Func _TabIsEnabled($iIndex)
+    If UBound($g_aTabEnabled) = 0 Then Return True
+    If $iIndex < 0 Or $iIndex >= UBound($g_aTabEnabled) Then Return True
+    Return $g_aTabEnabled[$iIndex]
+EndFunc
+
+Func _WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
+    If $g_hTabHandle = 0 Then Return $GUI_RUNDEFMSG
+
+    Local $tNMHDR = DllStructCreate($tagNMHDR, $lParam)
+    Local $hFrom  = HWnd(DllStructGetData($tNMHDR, "hWndFrom"))
+    If $hFrom <> $g_hTabHandle Then Return $GUI_RUNDEFMSG
+
+    Local $iCode = DllStructGetData($tNMHDR, "Code")
+
+    Switch $iCode
+        Case $TCN_SELCHANGE
+            ; Skip if this notification was raised by our own programmatic switch
+            If $g_bAllowProgrammaticTabChange Then Return $GUI_RUNDEFMSG
+
+            Local $iNew = _GUICtrlTab_GetCurSel($g_hTabHandle)
+            If Not _TabIsEnabled($iNew) Then
+                ; User clicked a disabled tab — bounce back to Modules immediately
+                $g_bAllowProgrammaticTabChange = True
+                _GUICtrlTab_SetCurSel($g_hTabHandle, $g_iTabMod)
+                $g_bAllowProgrammaticTabChange = False
+
+                ; Force repaint so the Modules tab content reappears cleanly
+                DllCall("user32.dll", "bool", "RedrawWindow", "hwnd", $g_hMain, "ptr", 0, "ptr", 0, "uint", 0x0185)
+
+                If $g_lblFooter <> 0 Then GUICtrlSetData($g_lblFooter, "Tab [off] — enable the module in tab 2. Modules.")
+            Else
+                If $g_lblFooter <> 0 Then GUICtrlSetData($g_lblFooter, $TITLE & " | Replaces Toolbox_v2.0.1.xlsm | " & @YEAR)
+            EndIf
+    EndSwitch
+
+    Return $GUI_RUNDEFMSG
+EndFunc
+
+
+;=============================================================================
+; UI: RESIZE HANDLING (avoid controls overlapping)
+;=============================================================================
+Func _OnResize()
+    If $g_hMain = 0 Then Return
+    Local $a = WinGetClientSize($g_hMain)
+    If @error Then Return
+    _LayoutMain($a[0], $a[1])
+EndFunc
+
+Func _LayoutMain($w, $h)
+    Local $bottomBarTop = $h - $BOTTOM_BAR_H
+    If $bottomBarTop < ($TAB_TOP_Y + 200) Then $bottomBarTop = $TAB_TOP_Y + 200
+
+    ; Resize tab control
+    If $g_hTab <> 0 Then GUICtrlSetPos($g_hTab, 5, $TAB_TOP_Y, $w - 10, $bottomBarTop - $TAB_TOP_Y - 6)
+
+    ; Bottom separator line
+    If $g_idBottomLine <> 0 Then GUICtrlSetPos($g_idBottomLine, 0, $bottomBarTop + 5, $w, 2)
+
+    ; Bottom toolbar buttons
+    Local $yBtn = $bottomBarTop + 12
+    If IsDeclared("g_btnImportXLS") Then GUICtrlSetPos($g_btnImportXLS, 10,  $yBtn, 140, 32)
+    If IsDeclared("g_btnExportXLS") Then GUICtrlSetPos($g_btnExportXLS, 158, $yBtn, 140, 32)
+    If IsDeclared("g_btnClearDB")   Then GUICtrlSetPos($g_btnClearDB,   306, $yBtn, 110, 32)
+    If IsDeclared("g_btnGenerate")  Then GUICtrlSetPos($g_btnGenerate,  424, $yBtn, 140, 32)
+    If IsDeclared("g_btnExecute")   Then GUICtrlSetPos($g_btnExecute,   572, $yBtn, 150, 32)
+    If IsDeclared("g_btnSaveSQL")   Then GUICtrlSetPos($g_btnSaveSQL,   730, $yBtn, 120, 32)
+    If $g_lblFooter <> 0 Then GUICtrlSetPos($g_lblFooter, $w - 210, $yBtn + 14, 200, 18)
+
+    ; Usable content area bottom edge (inside the tab, minus a small margin)
+    Local $tabInnerBottom = $bottomBarTop - $TAB_TOP_Y - 30
+    Local $bottomContent  = $TAB_TOP_Y + $tabInnerBottom - 8
+
+    ; Resize all ListViews to fill available height
+    _ResizeToBottom($g_hLV_Cal,  $w, $bottomContent)
+    _ResizeToBottom($g_hLV_Mach, $w, $bottomContent)
+    _ResizeToBottom($g_hLV_Ops,  $w, $bottomContent)
+    _ResizeToBottom($g_hLV_Rout, $w, $bottomContent)
+    _ResizeToBottom($g_hLV_Mat,  $w, $bottomContent)
+    _ResizeToBottom($g_hLV_BOM,  $w, $bottomContent)
+    _ResizeToBottom($g_hLV_WO,   $w, $bottomContent)
+    _ResizeToBottom($g_hLV_WOL,  $w, $bottomContent)
+    _ResizeToBottom($g_hLV_SR,   $w, $bottomContent)
+    _ResizeToBottom($g_hLV_Cap,  $w, $bottomContent)
+    _ResizeToBottom($g_hLV_Stk,  $w, $bottomContent)
+
+    ; SQL tab: the exec log is anchored 95px above the bottom content edge.
+    ; The SQL edit box fills the space above it.
+    If IsDeclared("g_hExecLog") Then
+        Local $yExec = $bottomContent - 75
+        If $yExec < 400 Then $yExec = 400
+        GUICtrlSetPos($g_hExecLog, 20, $yExec, $w - 40, 55)
+    EndIf
+    If $g_hLog <> 0 Then
+        Local $pLog = ControlGetPos($g_hMain, "", $g_hLog)
+        If Not @error Then
+            Local $logBottom = (IsDeclared("g_hExecLog") ? ($bottomContent - 95) : $bottomContent)
+            Local $newH = $logBottom - $pLog[1]
+            If $newH < 120 Then $newH = 120
+            GUICtrlSetPos($g_hLog, $pLog[0], $pLog[1], $w - 40, $newH)
+        EndIf
+    EndIf
+EndFunc
+
+Func _ResizeToBottom($ctrlId, $w, $bottomY)
+    If $ctrlId = 0 Then Return
+    Local $p = ControlGetPos($g_hMain, "", $ctrlId)
+    If @error Then Return
+    Local $newH = $bottomY - $p[1]
+    If $newH < 80 Then $newH = 80
+    GUICtrlSetPos($ctrlId, $p[0], $p[1], $w - 40, $newH)
+EndFunc
+
+; Enforce minimum window size
+Func _WM_GETMINMAXINFO($hWnd, $iMsg, $wParam, $lParam)
+    Local $tMMI = DllStructCreate("long;long;long;long;long;long;long;long;long;long", $lParam)
+    DllStructSetData($tMMI, 7, $MIN_W)
+    DllStructSetData($tMMI, 8, $MIN_H)
+    Return 0
+EndFunc
+
 Func _OnClose()
-    Local $nRet = MsgBox(4 + 32, "Sair", "Deseja sair do Ortems Toolbox?" & @CRLF & @CRLF & "Os dados nao salvos serao perdidos.")
+    _SaveSettings()
+    Local $nRet = MsgBox(4 + 32, "Exit", "Do you want to exit Ortems Toolbox?" & @CRLF & @CRLF & "Unsaved data will be lost.")
     If $nRet = 6 Then Exit
+EndFunc
+
+;=============================================================================
+; SETTINGS: LOAD / SAVE  (settings.ini next to the .au3 / .exe)
+;=============================================================================
+Func _SaveSettings()
+    ; [Connection]
+    IniWrite($g_sIniFile, "Connection", "Server",   GUICtrlRead($g_edtServer))
+    IniWrite($g_sIniFile, "Connection", "Database", GUICtrlRead($g_edtDatabase))
+    IniWrite($g_sIniFile, "Connection", "Auth",     GUICtrlRead($g_cmbAuth))
+    IniWrite($g_sIniFile, "Connection", "User",     GUICtrlRead($g_edtUser))
+    ; NOTE: password is NOT saved for security reasons
+
+    ; [Modules]
+    IniWrite($g_sIniFile, "Modules", "Mode",   ($g_bModPS ? "PS" : "MP"))
+    IniWrite($g_sIniFile, "Modules", "SRP",    ($g_bModSRP   ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "WOL",    ($g_bModWOL   ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "SR",     ($g_bModSR    ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "INV",    ($g_bModINV   ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "MRK",    ($g_bModMRK   ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "LR",     ($g_bModLR    ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "PRM",    ($g_bModPRM   ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "BATCH",  ($g_bModBATCH ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "CROUT",  ($g_bModCROUT ? "1" : "0"))
+
+    ; [SQL]
+    If IsDeclared("g_chkClearFirst") Then
+        IniWrite($g_sIniFile, "SQL", "ClearFirst",  (GUICtrlRead($g_chkClearFirst)  = $GUI_CHECKED ? "1" : "0"))
+        IniWrite($g_sIniFile, "SQL", "Transaction", (GUICtrlRead($g_chkTransaction) = $GUI_CHECKED ? "1" : "0"))
+    EndIf
+
+    ; [Window]
+    Local $aPos = WinGetPos($g_hMain)
+    If Not @error Then
+        IniWrite($g_sIniFile, "Window", "X", $aPos[0])
+        IniWrite($g_sIniFile, "Window", "Y", $aPos[1])
+        IniWrite($g_sIniFile, "Window", "W", $aPos[2])
+        IniWrite($g_sIniFile, "Window", "H", $aPos[3])
+    EndIf
+EndFunc
+
+Func _LoadSettings()
+    If Not FileExists($g_sIniFile) Then Return   ; first run, keep defaults
+
+    ; [Connection]
+    Local $sServer = IniRead($g_sIniFile, "Connection", "Server",   "")
+    Local $sDB     = IniRead($g_sIniFile, "Connection", "Database", "")
+    Local $sAuth   = IniRead($g_sIniFile, "Connection", "Auth",     "Windows Authentication")
+    Local $sUser   = IniRead($g_sIniFile, "Connection", "User",     "")
+
+    If $sServer <> "" Then GUICtrlSetData($g_edtServer,   $sServer)
+    If $sDB     <> "" Then GUICtrlSetData($g_edtDatabase, $sDB)
+    GUICtrlSetData($g_cmbAuth, $sAuth)
+    _OnAuthChange()   ; enable/disable user+pass fields based on auth type
+    If $sUser <> "" Then GUICtrlSetData($g_edtUser, $sUser)
+
+    ; [Modules]
+    Local $sMode = IniRead($g_sIniFile, "Modules", "Mode", "PS")
+    If $sMode = "MP" Then
+        GUICtrlSetState($g_rbMP, $GUI_CHECKED)
+        GUICtrlSetState($g_rbPS, $GUI_UNCHECKED)
+    Else
+        GUICtrlSetState($g_rbPS, $GUI_CHECKED)
+        GUICtrlSetState($g_rbMP, $GUI_UNCHECKED)
+    EndIf
+
+    Local $aChks[][2] = [ _
+        [$g_chkSRP,   IniRead($g_sIniFile, "Modules", "SRP",   "0")], _
+        [$g_chkWOL,   IniRead($g_sIniFile, "Modules", "WOL",   "0")], _
+        [$g_chkSR,    IniRead($g_sIniFile, "Modules", "SR",    "0")], _
+        [$g_chkINV,   IniRead($g_sIniFile, "Modules", "INV",   "0")], _
+        [$g_chkMRK,   IniRead($g_sIniFile, "Modules", "MRK",   "0")], _
+        [$g_chkLR,    IniRead($g_sIniFile, "Modules", "LR",    "0")], _
+        [$g_chkPRM,   IniRead($g_sIniFile, "Modules", "PRM",   "0")], _
+        [$g_chkBATCH, IniRead($g_sIniFile, "Modules", "BATCH", "0")], _
+        [$g_chkCROUT, IniRead($g_sIniFile, "Modules", "CROUT", "0")] _
+    ]
+    For $i = 0 To UBound($aChks) - 1
+        If $aChks[$i][1] = "1" Then
+            GUICtrlSetState($aChks[$i][0], $GUI_CHECKED)
+        Else
+            GUICtrlSetState($aChks[$i][0], $GUI_UNCHECKED)
+        EndIf
+    Next
+
+    ; [SQL]
+    If IniRead($g_sIniFile, "SQL", "ClearFirst", "1") = "1" Then
+        GUICtrlSetState($g_chkClearFirst, $GUI_CHECKED)
+    Else
+        GUICtrlSetState($g_chkClearFirst, $GUI_UNCHECKED)
+    EndIf
+    If IniRead($g_sIniFile, "SQL", "Transaction", "1") = "1" Then
+        GUICtrlSetState($g_chkTransaction, $GUI_CHECKED)
+    Else
+        GUICtrlSetState($g_chkTransaction, $GUI_UNCHECKED)
+    EndIf
+
+    ; [Window] - restore size/position
+    Local $iX = Int(IniRead($g_sIniFile, "Window", "X", "-1"))
+    Local $iY = Int(IniRead($g_sIniFile, "Window", "Y", "-1"))
+    Local $iW = Int(IniRead($g_sIniFile, "Window", "W", $APP_WIDTH))
+    Local $iH = Int(IniRead($g_sIniFile, "Window", "H", $APP_HEIGHT))
+    If $iW < $MIN_W Then $iW = $MIN_W
+    If $iH < $MIN_H Then $iH = $MIN_H
+    ; Clamp to screen bounds
+    Local $iSW = @DesktopWidth, $iSH = @DesktopHeight
+    If $iX < 0 Or $iX > $iSW - 100 Then $iX = -1
+    If $iY < 0 Or $iY > $iSH - 100 Then $iY = -1
+    If $iX <> -1 Then WinMove($g_hMain, "", $iX, $iY, $iW, $iH)
 EndFunc

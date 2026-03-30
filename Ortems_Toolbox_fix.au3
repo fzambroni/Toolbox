@@ -11,6 +11,8 @@
 #include <File.au3>
 #include <String.au3>
 #include <EditConstants.au3>
+#include <WindowsStylesConstants.au3>
+#include <StaticConstants.au3>
 
 
 ;=============================================================================
@@ -84,6 +86,18 @@ Global $g_aTabEnabled[0]
 Global $g_aTabBaseText[0]
 Global $g_bAllowProgrammaticTabChange = False
 
+; Settings persistence
+Global Const $g_sIniFile = @ScriptDir & "\settings.ini"
+
+; COM error handler (catches $oConn.Execute failures instead of crashing)
+Global $g_oComErr = ObjEvent("AutoIt.Error", "_ComErrorHandler")
+Global $g_sLastComError = ""
+
+Func _ComErrorHandler()
+    Local $oErr = $g_oComErr
+    $g_sLastComError = "COM Error 0x" & Hex($oErr.number, 8) & ": " & $oErr.description
+EndFunc
+
 
 ; Indices das tabs
 Global $g_iTabDB = 0, $g_iTabMod = 1
@@ -99,7 +113,9 @@ Main()
 
 Func Main()
     CreateMainWindow()
+    _LoadSettings()
     GUISetState(@SW_SHOW, $g_hMain)
+    _LogSessionStart()
     _RefreshModuleFlags(True)
     _OnResize()
 
@@ -131,7 +147,7 @@ Func CreateMainWindow()
     ; Status de conexao
     GUICtrlCreateLabel("Status:", 650, 10, 50, 18)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_lblStatus = GUICtrlCreateLabel("Disconnected", 705, 10, 200, 18)
+    Global $g_lblStatus = GUICtrlCreateLabel("Disconnected", 705, 10, 390, 18);,$SS_BLACKRECT)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
     GUICtrlSetColor($g_lblStatus, 0xCC0000)
 
@@ -240,70 +256,71 @@ EndFunc
 Func _CreateTabDatabase()
     Local $y = 85, $xL = 20, $xV = 200
 
-    GUICtrlCreateGroup("SQL Server Connection", $xL, $y, 600, 200)
-    $y += 25
+    GUICtrlCreateGroup("SQL Server Connection", $xL, $y, 620, 225)
+    $y += 28
 
     GUICtrlCreateLabel("Server / Instance:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtServer = GUICtrlCreateInput("localhost\SQLEXPRESS", $xV, $y, 200, 22)
+    Global $g_edtServer = GUICtrlCreateInput("localhost\SQLEXPRESS", $xV, $y, 220, 22)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    $y += 30
+    $y += 32
 
     GUICtrlCreateLabel("Database name:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtDatabase = GUICtrlCreateInput("ORTEMS_DEMO", $xV, $y, 200, 22)
+    Global $g_edtDatabase = GUICtrlCreateInput("ORTEMS_DEMO", $xV, $y, 220, 22)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    $y += 30
+    $y += 32
 
     GUICtrlCreateLabel("Authentication:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_cmbAuth = GUICtrlCreateCombo("Windows Authentication", $xV, $y, 200, 22)
+    Global $g_cmbAuth = GUICtrlCreateCombo("Windows Authentication", $xV, $y, 220, 22)
     GUICtrlSetData($g_cmbAuth, "SQL Server Authentication")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetOnEvent($g_cmbAuth, "_OnAuthChange")
-    $y += 30
+    $y += 32
 
     GUICtrlCreateLabel("User:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtUser = GUICtrlCreateInput("", $xV, $y, 200, 22)
+    Global $g_edtUser = GUICtrlCreateInput("", $xV, $y, 220, 22)
     GUICtrlSetState($g_edtUser, $GUI_DISABLE)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    $y += 30
+    $y += 32
 
     GUICtrlCreateLabel("Password:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtPass = GUICtrlCreateInput("", $xV, $y, 200, 22, $ES_PASSWORD)
+    Global $g_edtPass = GUICtrlCreateInput("", $xV, $y, 220, 22, $ES_PASSWORD)
     GUICtrlSetState($g_edtPass, $GUI_DISABLE)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    $y += 40
+    $y += 38
 
-    Global $g_btnConnect = GUICtrlCreateButton("Test Connection", $xV, $y, 150, 30)
+    Global $g_btnConnect = GUICtrlCreateButton("  Test Connection", $xV, $y, 160, 30)
     GUICtrlSetOnEvent($g_btnConnect, "_TestConnection")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
 
-    ; Info do caminho do banco (compatibilidade com Excel)
-    $y = 320
-    GUICtrlCreateGroup("Information", $xL, $y, 600, 120)
-    $y += 25
-
-    GUICtrlCreateLabel("Connection string:", $xL + 10, $y, 170, 20)
+    Global $g_btnInspect = GUICtrlCreateButton("Inspect Table...", $xV + 170, $y, 140, 30)
+    GUICtrlSetOnEvent($g_btnInspect, "_InspectTable")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtConnStr = GUICtrlCreateEdit("", $xL + 10, $y + 22, 570, 60, $ES_READONLY + $WS_VSCROLL)
+    GUICtrlSetTip($g_btnInspect, "Show columns of any Ortems table (useful to verify column names)")
+
+    ; Connection string display
+    $y = 330
+    GUICtrlCreateGroup("Active connection string", $xL, $y, 620, 80)
+    Global $g_edtConnStr = GUICtrlCreateEdit("", $xL + 10, $y + 22, 590, 48, $ES_READONLY + $WS_VSCROLL)
     GUICtrlSetFont(-1, 8, 400, 0, "Courier New")
     GUICtrlSetBkColor($g_edtConnStr, 0xF5F5F5)
 
-    ; Instrucoes
-    $y = 470
-    GUICtrlCreateGroup("How to use the Toolbox", $xL, $y, 700, 150)
+    ; Instructions
+    $y = 430
+    GUICtrlCreateGroup("How to use the Toolbox", $xL, $y, 720, 170)
     $y += 22
     Local $sInfo = "WORKFLOW:" & @CRLF & _
-        "  1. Configure the connection to the Ortems database (above)" & @CRLF & _
+        "  1. Configure the connection to the Ortems database (above) and click 'Test Connection'" & @CRLF & _
         "  2. Go to the '2. Modules' tab and select the required Ortems modules for the demo" & @CRLF & _
         "  3. Fill in the data in the tabs (Calendars, Machines, Operations, Routings, Items, etc.)" & @CRLF & _
-        "  4. Click 'GENERATE SQL' to build the SQL statements" & @CRLF & _
-        "  5. Click 'RUN ON DB' to insert the data into the Ortems database" & @CRLF & _
-        "  Tip: You can import data from an existing Excel file using 'Import Excel...'"
-    GUICtrlCreateEdit($sInfo, $xL + 10, $y, 680, 110, $ES_READONLY + $WS_VSCROLL)
+        "  4. Click 'GENERATE SQL' in the bottom toolbar to build the SQL script" & @CRLF & _
+        "  5. Click 'RUN ON DB' to execute the SQL and insert data into the Ortems database" & @CRLF & _
+        "  Tip: Settings (server, modules) are automatically saved to settings.ini"
+    GUICtrlCreateEdit($sInfo, $xL + 10, $y, 700, 130, $ES_READONLY + $WS_VSCROLL)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetBkColor(-1, 0xFFFFF0)
 EndFunc
@@ -394,7 +411,7 @@ EndFunc
 Func _CreateModuleCheckbox($y, $xL, $sNum, $sText)
     GUICtrlCreateLabel($sNum, $xL + 10, $y + 2, 35, 18)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
-    Local $hChk = GUICtrlCreateCheckbox($sText, $xL + 50, $y, 800, 20)
+    Local $hChk = GUICtrlCreateCheckbox($sText, $xL + 50, $y, 800, 20,-1);,$WS_EX_TOPMOST)
     GUICtrlSetOnEvent($hChk, "_OnModuleSelectionChanged")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     Return $hChk
@@ -404,19 +421,20 @@ EndFunc
 ; ABA: CALENDARIOS (SV_CALENDARS)
 ;=============================================================================
 Func _CreateTabCalendars()
-    ; Descricao
-    GUICtrlCreateLabel("Work Calendars (SV_CALENDARS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Work Calendars (SV_CALENDARS)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("A calendar defines working hours for machines or labor. Each row represents a shift for a given calendar.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A calendar defines working hours for machines or labor. Each row represents one shift slot.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Days: 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat, 7=Sun   |   Times in HH:MM format", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    ; Botoes CRUD
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Cal_Add", "_Cal_Edit", "_Cal_Del", "_Cal_DelAll")
 
-    ; ListView
     $g_hLV_Cal = GUICtrlCreateListView("Calendar ID|Calendar name|Start day|Start time|End day|End time|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 0, 130)
@@ -425,11 +443,6 @@ Func _CreateTabCalendars()
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 3, 90)
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 4, 90)
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 5, 90)
-
-    ; Exemplo
-    GUICtrlCreateLabel("Example: Cal_1x8 | Cal 1x8 | 1 (Mon) | 08:00 | 1 (Mon) | 17:00   |   Days: 1=Mon, 2=Tue, ... 7=Sun", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleCalendars()
 EndFunc
@@ -459,25 +472,25 @@ EndFunc
 ; ABA: MAQUINAS (SV_MACHINE)
 ;=============================================================================
 Func _CreateTabMachines()
-    GUICtrlCreateLabel("Machines & Work Centers (SV_MACHINE)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Machines & Work Centers (SV_MACHINE)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("A machine is a resource that executes operations. Each machine belongs to a single work center.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A machine is a resource that executes operations. Each machine belongs to a single work center (CT).", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("CT type: 2=Finite capacity | 4=Infinite capacity   |   Machine type: NR=Standard, BA=Batch, RN=Run, CU=Tank", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Mach_Add", "_Mach_Edit", "_Mach_Del", "_Mach_DelAll")
 
-    $g_hLV_Mach = GUICtrlCreateListView("Site ID|Site Nome|CT ID|CT Nome|Tipo CT|Secao ID|Secao Nome|Maq ID|Maq Nome|Tipo Maq|Cal ID|Cal Cap ID|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+    $g_hLV_Mach = GUICtrlCreateListView("Site ID|Site Name|CT ID|CT Name|CT Type|Section ID|Section Name|Machine ID|Machine Name|Mach Type|Cal ID|Cap Cal ID|", _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 11
         _GUICtrlListView_SetColumnWidth($g_hLV_Mach, $i, $COL_W - 30)
     Next
-
-    GUICtrlCreateLabel("WC type: 2=Finite capacity | 4=Infinite capacity   |   Machine type: NR=Standard, BA=Batch, RN=Run, CU=Tank", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleMachines()
 EndFunc
@@ -500,25 +513,25 @@ EndFunc
 ; ABA: OPERACOES (SV_OPERATIONS)
 ;=============================================================================
 Func _CreateTabOperations()
-    GUICtrlCreateLabel("Operations (SV_OPERATIONS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Operations (SV_OPERATIONS)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("An operation describes a process executed by a machine (e.g., Milling, Drilling, Assembly).", 20, 103, 900, 18)
+    GUICtrlCreateLabel("An operation describes a process executed by a machine (e.g., Milling, Drilling, Assembly).", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Unit: D=Days | H=Hours | C=Hundredths of an hour   |   Interruptible: 1=Yes, 0=No", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Ops_Add", "_Ops_Edit", "_Ops_Del", "_Ops_DelAll")
 
     $g_hLV_Ops = GUICtrlCreateListView("Operation ID|Operation name|WC ID|Machine ID|Ref qty|Ref duration|Unit|Setup|Break|Interrupt|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 9
         _GUICtrlListView_SetColumnWidth($g_hLV_Ops, $i, $COL_W - 20)
     Next
-
-    GUICtrlCreateLabel("Unit: D=Days | H=Hours | C=Hundredths of an hour   |   Interruptible: 1=Yes, 0=No", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleOperations()
 EndFunc
@@ -540,16 +553,20 @@ EndFunc
 ; ABA: ROTEIROS (SV_ROUTINGS)
 ;=============================================================================
 Func _CreateTabRoutings()
-    GUICtrlCreateLabel("Production Routings (SV_ROUTINGS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Production Routings (SV_ROUTINGS)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("A routing describes the steps of a manufacturing process (sequence of phases/operations).", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A routing describes the steps of a manufacturing process (sequence of phases/operations).", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Phase code: number (10, 20, 30...) that defines the operation sequence within the routing.", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Rout_Add", "_Rout_Edit", "_Rout_Del", "_Rout_DelAll")
 
     $g_hLV_Rout = GUICtrlCreateListView("Routing ID|Routing name|Phase code|Operation ID|Phase name|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 0, 160)
@@ -557,10 +574,6 @@ Func _CreateTabRoutings()
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 2, 110)
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 3, 160)
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 4, 250)
-
-    GUICtrlCreateLabel("Phase code: number (10, 20, 30...) that defines the operation sequence in the routing.", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleRoutings()
 EndFunc
@@ -584,16 +597,20 @@ EndFunc
 ; ABA: MATERIAIS (SV_MATERIALS)
 ;=============================================================================
 Func _CreateTabMaterials()
-    GUICtrlCreateLabel("Items (SV_MATERIALS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Items (SV_MATERIALS)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("An item is a product that is consumed or produced during the production process.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("An item is a product that is consumed or produced during the production process.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Type: MP=Raw material | SF=Semi-finished | PF=Finished good   |   Version: 00=standard, STD, SPT, etc.", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Mat_Add", "_Mat_Edit", "_Mat_Del", "_Mat_DelAll")
 
     $g_hLV_Mat = GUICtrlCreateListView("Item ID|Item name|Type|Version|Routing ID|On-hand qty|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 0, 150)
@@ -602,10 +619,6 @@ Func _CreateTabMaterials()
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 3, 80)
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 4, 150)
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 5, 110)
-
-    GUICtrlCreateLabel("Type: RM=Raw material (in) | SF=Semi-finished (in/out) | FG=Finished good (out)", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleMaterials()
 EndFunc
@@ -630,25 +643,25 @@ EndFunc
 ; ABA: BOM (SV_BOM)
 ;=============================================================================
 Func _CreateTabBOM()
-    GUICtrlCreateLabel("Bill of Materials - BOM (SV_BOM)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Bill of Materials - BOM (SV_BOM)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("The BOM defines the relationship between the parent item and the component items required to produce it.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("The BOM defines which component items are required to produce a parent item.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Example: STD_Box | STD | STD_Axes | STD_GB | 10 | 1 | 1   (1 axis to produce 1 box in phase 10)", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_BOM_Add", "_BOM_Edit", "_BOM_Del", "_BOM_DelAll")
 
     $g_hLV_BOM = GUICtrlCreateListView("Parent item ID|Parent version|Component item ID|Routing ID|Phase|Ref qty|Required qty|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 6
         _GUICtrlListView_SetColumnWidth($g_hLV_BOM, $i, $COL_W)
     Next
-
-    GUICtrlCreateLabel("Example: STD_Box | STD | STD_Axes | STD_GB | 10 | 1 | 1   (1 axis to make 1 box in phase 10)", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleBOM()
 EndFunc
@@ -671,16 +684,20 @@ EndFunc
 ; ABA: ORDENS DE PRODUCAO (SV_WO)
 ;=============================================================================
 Func _CreateTabWO()
-    GUICtrlCreateLabel("Work Orders (SV_WO)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Work Orders (SV_WO)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("A work order (WO) is a production order with item, quantity, and planned due date.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A work order (WO) is a production order with item, quantity, and planned due date.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Date format: dd/mm/yyyy hh:mm   |   WO number must be unique", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_WO_Add", "_WO_Edit", "_WO_Del", "_WO_DelAll")
 
     $g_hLV_WO = GUICtrlCreateListView("WO ID|Item ID|Routing|Version|Qty|Start date|End date|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 0, 120)
@@ -690,10 +707,6 @@ Func _CreateTabWO()
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 4, 80)
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 5, 140)
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 6, 140)
-
-    GUICtrlCreateLabel("Date format: dd/mm/yyyy hh:mm   |   WO number must be unique", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 
     _LoadExampleWOs()
 EndFunc
@@ -714,41 +727,45 @@ EndFunc
 ; ABA: WO LINKS
 ;=============================================================================
 Func _CreateTabWOLinks()
-    GUICtrlCreateLabel("WO / Operation links (Precedence constraints) (SV_WO_LINKS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("WO / Operation Links - Precedence Constraints (SV_WO_LINKS)", $xL, 80, 700, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("A link is a precedence constraint between two WOs/operations. Example: WO2 can only start after phase 10 of WO1 ends.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A link enforces a precedence constraint between two WOs/operations (e.g., WO2 starts only after phase 10 of WO1 ends).", $xL, 103, 950, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Link types: FS=Finish-Start | SS=Start-Start | FF=Finish-Finish | SF=Start-Finish", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_WOL_Add", "_WOL_Edit", "_WOL_Del", "_WOL_DelAll")
 
     $g_hLV_WOL = GUICtrlCreateListView("Predecessor WO|Pred routing|Pred phase|Successor WO|Succ routing|Succ phase|Link type|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 6
         _GUICtrlListView_SetColumnWidth($g_hLV_WOL, $i, $COL_W)
     Next
-
-    GUICtrlCreateLabel("Link types: FS=Finish-Start | SS=Start-Start | FF=Finish-Finish | SF=Start-Finish", 20, $y + 440, 900, 18)
-    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlSetColor(-1, 0x555555)
 EndFunc
 
 ;=============================================================================
 ; ABA: RECURSOS SECUNDARIOS
 ;=============================================================================
 Func _CreateTabSecResources()
-    GUICtrlCreateLabel("Secondary Resources (SV_SEC_RESOURCES)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Secondary Resources (SV_SEC_RESOURCES)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("A secondary resource is required during an operation in addition to the machine (e.g., labor).", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A secondary resource is required during an operation in addition to the primary machine (e.g., labor, tooling).", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Qualification ID identifies the type of labor or tool required. Capacity calendar controls availability.", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_SR_Add", "_SR_Edit", "_SR_Del", "_SR_DelAll")
 
     $g_hLV_SR = GUICtrlCreateListView("Operation ID|WC ID|Machine ID|Qualification ID|Capacity calendar ID|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 4
@@ -760,16 +777,20 @@ EndFunc
 ; ABA: CAPACIDADE
 ;=============================================================================
 Func _CreateTabCapacity()
-    GUICtrlCreateLabel("Capacity Calendars (SV_CAPACITY)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Capacity Calendars (SV_CAPACITY)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("A capacity calendar defines shifts and the number of available resources for load calculation.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("A capacity calendar defines shifts and the number of resources available for load calculation.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Days: 1=Mon ... 7=Sun   |   #Resources = number of concurrent resources available during that shift", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Cap_Add", "_Cap_Edit", "_Cap_Del", "_Cap_DelAll")
 
     $g_hLV_Cap = GUICtrlCreateListView("Cap cal ID|Start day|Start time|End day|End time|#Resources|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 5
@@ -781,16 +802,20 @@ EndFunc
 ; ABA: MOVIMENTACOES DE ESTOQUE
 ;=============================================================================
 Func _CreateTabStockMov()
-    GUICtrlCreateLabel("Inventory Movements (SV_STOCK_MOVEMENTS)", 20, 80, 600, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("Inventory Movements (SV_STOCK_MOVEMENTS)", $xL, 80, 600, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("An inventory movement is an in/out transaction of an item on a given date.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("An inventory movement is an in/out transaction of an item on a given date.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlCreateLabel("Positive quantity = receipt; negative quantity = issue. Date format: dd/mm/yyyy", $xL, 123, 900, 18)
+    GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
 
-    Local $y = 125
+    Local $y = 145
     _CreateCRUDButtons($y, "_Stk_Add", "_Stk_Edit", "_Stk_Del", "_Stk_DelAll")
 
     $g_hLV_Stk = GUICtrlCreateListView("Item ID|Routing ID|Version|Move date|Quantity|", _
-        20, $y + 35, $APP_WIDTH - 40, 390, _
+        $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 4
@@ -802,39 +827,41 @@ EndFunc
 ; ABA: GERAR SQL
 ;=============================================================================
 Func _CreateTabSQL()
-    GUICtrlCreateLabel("SQL Generation & Execution", 20, 80, 500, 20)
+    Local $xL = 20
+    GUICtrlCreateLabel("SQL Generation & Execution", $xL, 80, 500, 20)
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
-    GUICtrlCreateLabel("Click 'GENERATE SQL' in the bottom bar to build the script. Then click 'RUN ON DB' to insert the data.", 20, 103, 900, 18)
+    GUICtrlCreateLabel("Click 'GENERATE SQL' in the bottom toolbar to build the script. Then click 'RUN ON DB' to execute it.", $xL, 103, 950, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
 
-    ; Opcoes de geracao
+    ; Options row (inline, no group box needed)
     Local $y = 128
-    GUICtrlCreateGroup("Opcoes", 20, $y, 400, 80)
-    Global $g_chkClearFirst = GUICtrlCreateCheckbox("Clear existing data before insert (DELETE FROM ...)", 35, $y + 22, 380, 20)
+    GUICtrlCreateGroup("Options", $xL, $y, 420, 68)
+    Global $g_chkClearFirst = GUICtrlCreateCheckbox("Clear existing data before insert (DELETE FROM ...)", $xL + 15, $y + 18, 390, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetState($g_chkClearFirst, $GUI_CHECKED)
-    Global $g_chkTransaction = GUICtrlCreateCheckbox("Use transaction (rollback on error)", 35, $y + 44, 380, 20)
+    Global $g_chkTransaction = GUICtrlCreateCheckbox("Wrap in a transaction (auto ROLLBACK on error)", $xL + 15, $y + 40, 390, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetState($g_chkTransaction, $GUI_CHECKED)
 
-    ; Area do SQL gerado
-    $y = 218
-    GUICtrlCreateLabel("Generated SQL:", 20, $y, 200, 18)
+    ; SQL editor
+    $y = 206
+    GUICtrlCreateLabel("Generated SQL:", $xL, $y, 200, 18)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
 
-    $g_hLog = GUICtrlCreateEdit("-- Click 'GENERATE SQL' to view the SQL statements..." & @CRLF & _
-        "-- The SQL is based on the data entered in the previous tabs.", _
-        20, $y + 22, $APP_WIDTH - 40, $APP_HEIGHT - 360, _
+    ; SQL box: height leaves room for exec log at the bottom (fixed 90px area)
+    $g_hLog = GUICtrlCreateEdit("-- Click 'GENERATE SQL' to build the script..." & @CRLF & _
+        "-- SQL is built from data entered in each tab.", _
+        $xL, $y + 20, $APP_WIDTH - 40, 300, _
         BitOR($ES_MULTILINE, $WS_VSCROLL, $WS_HSCROLL, $ES_READONLY, $ES_AUTOVSCROLL))
     GUICtrlSetFont(-1, 9, 400, 0, "Courier New")
     GUICtrlSetBkColor($g_hLog, 0x1E1E1E)
     GUICtrlSetColor($g_hLog, 0x00FF00)
 
-    ; Log de execucao
-    $y = $APP_HEIGHT - 130
-    GUICtrlCreateLabel("Execution log:", 20, $y, 200, 18)
+    ; Execution log - placed after SQL box with fixed offset, well within tab area
+    $y = $y + 20 + 300 + 10
+    GUICtrlCreateLabel("Execution log:", $xL, $y, 200, 18)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
-    Global $g_hExecLog = GUICtrlCreateEdit("", 20, $y + 20, $APP_WIDTH - 40, 60, _
+    Global $g_hExecLog = GUICtrlCreateEdit("", $xL, $y + 20, $APP_WIDTH - 40, 55, _
         BitOR($ES_MULTILINE, $WS_VSCROLL, $ES_READONLY))
     GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
     GUICtrlSetBkColor($g_hExecLog, 0xFFFFF0)
@@ -1156,14 +1183,66 @@ Func _TestConnection()
 
     If $bOK Then
         $g_bConnected = True
+		MsgBox(262144,"","Connected: " & $g_sDatabase & "@" & $g_sServer)
         GUICtrlSetData($g_lblStatus, "Connected: " & $g_sDatabase & "@" & $g_sServer)
         GUICtrlSetColor($g_lblStatus, 0x007700)
-        MsgBox(64, "Connection", "Successfully connected to the database!" & @CRLF & @CRLF & "Database: " & $g_sDatabase & @CRLF & "Servidor: " & $g_sServer)
+        _SaveSettings()   ; persist server + database immediately
+        MsgBox(64, "Connection", "Successfully connected to the database!" & @CRLF & @CRLF & "Database: " & $g_sDatabase & @CRLF & "Server: " & $g_sServer)
     Else
         $g_bConnected = False
         GUICtrlSetData($g_lblStatus, "Connection error")
         GUICtrlSetColor($g_lblStatus, 0xCC0000)
         MsgBox(16, "Connection error", "Could not connect to the database." & @CRLF & @CRLF & $sErr & @CRLF & @CRLF & "Connection string used:" & @CRLF & $g_sConnStr)
+    EndIf
+EndFunc
+
+Func _InspectTable()
+    If Not $g_bConnected Then
+        MsgBox(48, "Not connected", "Test the connection first (tab 1. Database).")
+        Return
+    EndIf
+
+    Local $sTable = InputBox("Inspect Table", "Enter the table name to inspect (e.g. B_NOME, B_MACH, B_OF):", "B_NOME", "", 320, 130)
+    If $sTable = "" Or @error Then Return
+    $sTable = StringStripWS(StringUpper($sTable), 3)
+
+    Local $oConn = ObjCreate("ADODB.Connection")
+    If Not IsObj($oConn) Then Return
+    $g_sLastComError = ""
+    $oConn.Open($g_sConnStr)
+    If $g_sLastComError <> "" Or $oConn.State <> 1 Then Return
+
+    $g_sLastComError = ""
+    Local $oRS = $oConn.Execute( _
+        "SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE " & _
+        "FROM INFORMATION_SCHEMA.COLUMNS " & _
+        "WHERE TABLE_NAME='" & $sTable & "' ORDER BY ORDINAL_POSITION")
+
+    If $g_sLastComError <> "" Or Not IsObj($oRS) Then
+        $oConn.Close()
+        MsgBox(16, "Error", "Could not query schema: " & $g_sLastComError)
+        Return
+    EndIf
+
+    Local $sResult = "Columns of table [" & $sTable & "]:" & @CRLF & @CRLF
+    Local $nCols = 0
+    While Not $oRS.EOF
+        $nCols += 1
+        Local $sCol  = $oRS.Fields(0).Value
+        Local $sType = $oRS.Fields(1).Value
+        Local $sLen  = $oRS.Fields(2).Value
+        Local $sNull = $oRS.Fields(3).Value
+        If $sLen <> "" And $sLen <> "Null" Then $sType &= "(" & $sLen & ")"
+        $sResult &= "  " & $sCol & "  [" & $sType & "]" & ($sNull = "YES" ? " NULL" : " NOT NULL") & @CRLF
+        $oRS.MoveNext()
+    WEnd
+    $oRS.Close()
+    $oConn.Close()
+
+    If $nCols = 0 Then
+        MsgBox(48, "Not found", "Table '" & $sTable & "' not found in the database.")
+    Else
+        MsgBox(64, "Schema: " & $sTable & " (" & $nCols & " columns)", $sResult)
     EndIf
 EndFunc
 
@@ -1255,28 +1334,12 @@ Func _GenerateSQL()
     GUICtrlSetState($g_hTab, $g_iTabSQL)
 EndFunc
 
-Func _GetClearSQL()
-    Local $s = ""
-    $s &= "DELETE FROM B_PROF WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_NOME WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM E_OF2 WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_OF WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_SER WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_VER_ART WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_ART WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_PHAS WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_GAMM WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_CADE WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_OPE WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_MACH WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_SECT WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_ILOT WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_ZONE WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_PERI WHERE 1=1;" & @CRLF
-    $s &= "DELETE FROM B_CAL WHERE 1=1;" & @CRLF
-    Return $s
-EndFunc
-
+;=============================================================================
+; EXECUTAR SQL NO BANCO
+;=============================================================================
+;=============================================================================
+; SQL GENERATION FUNCTIONS
+;=============================================================================
 Func _GenerateCalSQL()
     Local $s = ""
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Cal)
@@ -1325,8 +1388,8 @@ Func _GenerateMachSQL()
         $s &= "IF NOT EXISTS (SELECT 1 FROM B_SECT WHERE CODESECTI='" & $sSecID & "')" & @CRLF
         $s &= "    INSERT INTO B_SECT (CODESECTI, DESIGSECT) VALUES ('" & $sSecID & "', '" & $sSecNm & "');" & @CRLF
         $s &= "IF NOT EXISTS (SELECT 1 FROM B_MACH WHERE MACHINE='" & $sMaqID & "')" & @CRLF
-        $s &= "    INSERT INTO B_MACH (MACHINE, LIBMACH, ILOT, CODESECTI, NOZONE, MACH_MODEMACH, NOCALHEBD, CODE_CYCLE) " & @CRLF
-        $s &= "    VALUES ('" & $sMaqID & "', '" & $sMaqNm & "', '" & $sCTID & "', '" & $sSecID & "', '" & $sSiteID & "', '" & $sMaqTp & "', '" & $sCalID & "', '" & $sCalCap & "');" & @CRLF
+        $s &= "    INSERT INTO B_MACH (MACHINE, LIBMACH, ILOT, CODESECTI, NOZONE, MACH_MODEMACH, NOCALHEBD) " & @CRLF
+        $s &= "    VALUES ('" & $sMaqID & "', '" & $sMaqNm & "', '" & $sCTID & "', '" & $sSecID & "', '" & $sSiteID & "', '" & $sMaqTp & "', '" & $sCalID & "');" & @CRLF
     Next
     Return $s
 EndFunc
@@ -1387,12 +1450,17 @@ Func _GenerateMatSQL()
         $s &= "IF NOT EXISTS (SELECT 1 FROM B_ART WHERE CODEARTIC='" & $sID & "')" & @CRLF
         $s &= "    INSERT INTO B_ART (CODEARTIC, LIBARTIC, TYPEMATI, QTE_STOCK) VALUES ('" & $sID & "', '" & $sNome & "', '" & $sTipo & "', " & $nStk & ");" & @CRLF
         $s &= "INSERT INTO B_VER_ART (CODEARTIC, VER_ART, VER_DESC, NOMG, VER_EFFET_DEBUT, VER_EFFET_FIN)" & @CRLF
-        $s &= "    VALUES ('" & $sID & "', '" & $sVer & "', '" & $sNome & "', '" & $sRot & "', '01/01/1995 00:00', '01/01/2050 00:00');" & @CRLF
+        $s &= "    VALUES ('" & $sID & "', '" & $sVer & "', '" & $sNome & "', '" & $sRot & "', CONVERT(datetime,'01/01/1995',103), CONVERT(datetime,'01/01/2050',103));" & @CRLF
     Next
     Return $s
 EndFunc
 
 Func _GenerateBOMSQL()
+    ; B_NOME quantity column names vary between Ortems versions.
+    ; Query the live schema to pick the right ones rather than hardcoding.
+    Local $sQtyBase = _DetectBNOMEColumn("qty_base", "QTEREF;QTEBASET;CODEBASET;QTE_BASE;QTBASE;QTE1")
+    Local $sQtyNec  = _DetectBNOMEColumn("qty_nec",  "QTENEC;QTEBESO;BES_CODEARTIC;QTE_BES;QTBESO;QTE2")
+
     Local $s = ""
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_BOM)
     For $i = 0 To $nRows - 1
@@ -1404,13 +1472,79 @@ Func _GenerateBOMSQL()
         Local $nQRef   = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 5)
         Local $nQNec   = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 6)
 
-        $s &= "INSERT INTO B_NOME (B_V_CODEARTIC, VER_ART, CODEARTIC, NOMG, NOPHASE, CODEBASET, BES_CODEARTIC)" & @CRLF
+        $s &= "INSERT INTO B_NOME (B_V_CODEARTIC, VER_ART, CODEARTIC, NOMG, NOPHASE, " & $sQtyBase & ", " & $sQtyNec & ")" & @CRLF
         $s &= "    VALUES ('" & $sPaiID & "', '" & $sVPai & "', '" & $sCompID & "', '" & $sRotID & "', " & $nFase & ", " & $nQRef & ", " & $nQNec & ");" & @CRLF
     Next
     Return $s
 EndFunc
 
+; Detects which of the candidate column names actually exists in B_NOME.
+; $sCandidates = semicolon-separated list tried in order.
+; Returns the first match, or the first candidate as fallback.
+; Generic: query INFORMATION_SCHEMA.COLUMNS to find the first matching column
+; $sTable = table name, $sRole = description for log, $sCandidates = semicolon list
+Func _DetectColumn($sTable, $sRole, $sCandidates)
+    Local $aCands = StringSplit($sCandidates, ";", 1)
+    If Not $g_bConnected Or $g_sConnStr = "" Then Return $aCands[1]
+
+    Local $oConn = ObjCreate("ADODB.Connection")
+    If Not IsObj($oConn) Then Return $aCands[1]
+    $g_sLastComError = ""
+    $oConn.Open($g_sConnStr)
+    If $g_sLastComError <> "" Or $oConn.State <> 1 Then Return $aCands[1]
+
+    $g_sLastComError = ""
+    Local $oRS = $oConn.Execute( _
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " & _
+        "WHERE TABLE_NAME='" & $sTable & "' ORDER BY ORDINAL_POSITION")
+
+    Local $sFound = ""
+    If $g_sLastComError = "" And IsObj($oRS) Then
+        Local $sActual = ""
+        While Not $oRS.EOF
+            $sActual &= ";" & $oRS.Fields(0).Value
+            $oRS.MoveNext()
+        WEnd
+        $oRS.Close()
+        For $i = 1 To $aCands[0]
+            If $aCands[$i] = "__NONE__" Then ContinueLoop   ; sentinel — skip
+            If StringInStr($sActual, ";" & $aCands[$i]) Then
+                $sFound = $aCands[$i]
+                _Log($sTable & " schema: column '" & $sFound & "' used for " & $sRole)
+                ExitLoop
+            EndIf
+        Next
+        If $sFound = "" Then
+            ; Check if __NONE__ sentinel was used — means caller intentionally allows "not found"
+            If StringInStr($sCandidates, "__NONE__") Then
+                _Log($sTable & " schema: column for " & $sRole & " not present in this version (optional)")
+                $sFound = ""   ; caller will check for empty string
+            Else
+                _Log("WARNING: No match in " & $sTable & " for " & $sRole & ". Actual:" & $sActual)
+                $sFound = $aCands[1]   ; fallback to first candidate
+            EndIf
+        EndIf
+    Else
+        $sFound = $aCands[1]
+    EndIf
+
+    $oConn.Close()
+    Return $sFound
+EndFunc
+
+; Backward-compat wrapper
+Func _DetectBNOMEColumn($sRole, $sCandidates)
+    Return _DetectColumn("B_NOME", $sRole, $sCandidates)
+EndFunc
+
 Func _GenerateWOSQL()
+    ; Detect version-dependent B_OF column names at runtime
+    Local $sQteCol = _DetectColumn("B_OF", "qty_order", "QTE;QTEORDER;QTEOF;QTE_ORDER;QTEOFORDER;QTECMD")
+
+    ; MODE_UTIL exists in some Ortems versions but not all
+    Local $sModeUtil = _DetectColumn("B_OF", "mode_util", "MODE_UTIL;MODE_GESTION;MODUTIL;__NONE__")
+    Local $bHasModeUtil = ($sModeUtil <> "__NONE__" And $sModeUtil <> "")
+
     Local $s = ""
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_WO)
     For $i = 0 To $nRows - 1
@@ -1422,14 +1556,23 @@ Func _GenerateWOSQL()
         Local $sDtI  = _GUICtrlListView_GetItemText($g_hLV_WO, $i, 5)
         Local $sDtF  = _GUICtrlListView_GetItemText($g_hLV_WO, $i, 6)
 
-        $s &= "INSERT INTO B_OF (NOF, CODEARTIC, NOMG, VER_ART, QTEORDER, DPLUSTOT, FPLUSTARD," & @CRLF
-        $s &= "    CODEGEST, ETATOF, VER_EFFET_DEBUT, VER_EFFET_FIN, MODE_UTIL)" & @CRLF
-        $s &= "    VALUES ('" & $sNum & "', '" & $sMat & "', '" & $sRot & "', '" & $sVer & "', " & $nQtd & "," & @CRLF
-        $s &= "    CONVERT(datetime, '" & $sDtI & "', 103), CONVERT(datetime, '" & $sDtF & "', 103)," & @CRLF
-        $s &= "    'F', 'S', '01/01/1995 00:00', '01/01/2050 00:00', 'C');" & @CRLF
+        Local $sColList = "NOF, CODEARTIC, NOMG, SERIE, VER_ART, " & $sQteCol & ", DPLUSTOT, FPLUSTARD, CODEGEST, ETATOF, VER_EFFET_DEBUT, VER_EFFET_FIN"
+        Local $sValList = "'" & $sNum & "', '" & $sMat & "', '" & $sRot & "', '0', '" & $sVer & "', " & $nQtd & ", " & _
+            "CONVERT(datetime, '" & $sDtI & "', 103), CONVERT(datetime, '" & $sDtF & "', 103), " & _
+            "'F', 'S', CONVERT(datetime,'01/01/1995',103), CONVERT(datetime,'01/01/2050',103)"
+
+        If $bHasModeUtil Then
+            $sColList &= ", " & $sModeUtil
+            $sValList &= ", 'C'"
+        EndIf
+
+        $s &= "INSERT INTO B_OF (" & $sColList & ")" & @CRLF
+        $s &= "    VALUES (" & $sValList & ");" & @CRLF
     Next
     Return $s
 EndFunc
+
+
 
 Func _GenerateWOLSQL()
     Local $s = ""
@@ -1449,9 +1592,7 @@ Func _GenerateWOLSQL()
     Return $s
 EndFunc
 
-;=============================================================================
-; EXECUTAR SQL NO BANCO
-;=============================================================================
+
 Func _ExecuteSQL()
     If Not $g_bConnected Then
         MsgBox(48, "Warning", "You are not connected to the database." & @CRLF & "Go to the '1. Database' tab and test the connection first.")
@@ -1466,49 +1607,274 @@ Func _ExecuteSQL()
 
     Local $nRet = MsgBox(4 + 48, "Confirm execution", _
         "You are about to run SQL on the database:" & @CRLF & @CRLF & _
-        "Database: " & $g_sDatabase & @CRLF & "Servidor: " & $g_sServer & @CRLF & @CRLF & _
+        "Database: " & $g_sDatabase & @CRLF & "Server: " & $g_sServer & @CRLF & @CRLF & _
         "This action can DELETE and RECREATE existing data!" & @CRLF & @CRLF & _
         "Do you want to continue?")
 
-    If $nRet <> 6 Then Return  ; 6 = Yes
+    If $nRet <> 6 Then Return
+
+    ; Pre-flight FK validation before touching the database
+    Local $nFKIssues = _ValidateFKBeforeImport()
+    If $nFKIssues > 0 Then
+        Local $nGo = MsgBox(4 + 48, "FK Validation Warnings", _
+            $nFKIssues & " potential FK reference issue(s) detected." & @CRLF & @CRLF & _
+            "Details written to log.txt." & @CRLF & @CRLF & _
+            "Continue anyway?")
+        If $nGo <> 6 Then Return
+    EndIf
+
 
     Local $oConn = ObjCreate("ADODB.Connection")
     If Not IsObj($oConn) Then
-        _Log("ERROR: Could not create the connection object.")
+        _Log("ERROR: Could not create ADODB.Connection object.")
         Return
     EndIf
 
+    $g_sLastComError = ""
     $oConn.Open($g_sConnStr)
+    If $g_sLastComError <> "" Then
+        _Log("ERROR opening connection: " & $g_sLastComError)
+        MsgBox(16, "Connection error", "Could not open connection:" & @CRLF & $g_sLastComError)
+        Return
+    EndIf
     If $oConn.State <> 1 Then
-        _Log("ERROR: Could not open the connection.")
+        _Log("ERROR: Connection state is not Open.")
         Return
     EndIf
 
-    ; Executa cada statement separado por ";"
-    Local $aStmts = StringSplit($sSQL, ";", 1)
+    Local $bUseTrans = (GUICtrlRead($g_chkTransaction) = $GUI_CHECKED)
     Local $nOK = 0, $nErr = 0
+    Local $bTransStarted = False
+
+    If $bUseTrans Then
+        $g_sLastComError = ""
+        $oConn.BeginTrans()
+        If $g_sLastComError <> "" Then
+            _Log("WARNING: BeginTrans failed (" & $g_sLastComError & ") — running without transaction.")
+            $bUseTrans = False
+        Else
+            $bTransStarted = True
+        EndIf
+    EndIf
+
+    Local $aStmts = StringSplit($sSQL, ";", 1)
 
     For $i = 1 To $aStmts[0]
         Local $sStmt = StringStripWS($aStmts[$i], 3)
-        If $sStmt = "" Or StringLeft($sStmt, 2) = "--" Then ContinueLoop
+        If $sStmt = "" Then ContinueLoop
+        If StringLeft($sStmt, 2) = "--" Then ContinueLoop
+        If StringUpper(StringStripWS($sStmt, 3)) = "BEGIN TRANSACTION" Then ContinueLoop
+        If StringUpper(StringStripWS($sStmt, 3)) = "COMMIT TRANSACTION" Then ContinueLoop
+        If StringUpper(StringStripWS($sStmt, 3)) = "ROLLBACK TRANSACTION" Then ContinueLoop
 
+        Local $sNoComments = StringRegExpReplace($sStmt, "(?m)^\s*--[^\r\n]*", "")
+        If StringStripWS($sNoComments, 3) = "" Then ContinueLoop
+
+        $g_sLastComError = ""
         $oConn.Execute($sStmt)
-        If @error Then
+
+        If $g_sLastComError <> "" Then
             $nErr += 1
-            _Log("ERROR in statement " & $i & ": " & $sStmt)
+            _Log("ERROR (stmt " & $i & "): " & $g_sLastComError)
+            _Log("  >> " & StringLeft(StringStripWS($sStmt, 3), 120))
+            If $bTransStarted Then
+                $g_sLastComError = ""
+                $oConn.RollbackTrans()
+                $oConn.Close()
+                _Log("Transaction ROLLED BACK due to error.")
+                MsgBox(16, "Execution error", _
+                    "A SQL error occurred — the transaction was rolled back." & @CRLF & @CRLF & _
+                    "Check the execution log and log.txt for details.")
+                Return
+            EndIf
         Else
             $nOK += 1
         EndIf
     Next
 
+    If $bTransStarted Then
+        $g_sLastComError = ""
+        $oConn.CommitTrans()
+        If $g_sLastComError <> "" Then
+            _Log("ERROR committing transaction: " & $g_sLastComError)
+            $oConn.RollbackTrans()
+        Else
+            _Log("Transaction committed successfully.")
+        EndIf
+    EndIf
+
     $oConn.Close()
-    _Log("Execucao concluida: " & $nOK & " statements OK, " & $nErr & " errors.")
-    MsgBox(64, "Resultado", "SQL executed successfully on the database!" & @CRLF & @CRLF & $nOK & " statements executed successfully." & @CRLF & ($nErr > 0 ? $nErr & " errors found (check the log)." : "No errors!"))
+    _Log("Execution finished: " & $nOK & " statements OK, " & $nErr & " errors.")
+
+    If $nErr = 0 Then
+        MsgBox(64, "Success", "All SQL executed successfully!" & @CRLF & @CRLF & $nOK & " statements executed.")
+    Else
+        MsgBox(48, "Completed with errors", $nOK & " statements OK, " & $nErr & " errors." & @CRLF & "Check the execution log and log.txt for details.")
+    EndIf
 EndFunc
 
+Func _GetClearSQL()
+    ; Returns an array of SQL statements executed individually via ADO.
+    ;
+    ; Strategy:
+    ;   1. Disable ALL FK constraints database-wide (handles deep FK chains)
+    ;   2. Disable ALL triggers on target tables (handles Ortems custom triggers
+    ;      like E_DELETE_MP on B_GAMM that block direct DELETEs)
+    ;   3. Delete data from every target table
+    ;   4. Re-enable triggers
+    ;   5. Re-enable and validate FK constraints
+
+    ; Step 1 — disable all FK constraints across the whole database
+    Local $sDisableFK = _
+        "DECLARE @sql NVARCHAR(MAX) = N''" & @CRLF & _
+        "SELECT @sql += N'ALTER TABLE [' + OBJECT_SCHEMA_NAME(parent_object_id) + '].[' + OBJECT_NAME(parent_object_id) + '] NOCHECK CONSTRAINT [' + name + ']; '" & @CRLF & _
+        "FROM sys.foreign_keys WHERE is_disabled = 0" & @CRLF & _
+        "EXEC sp_executesql @sql"
+
+    ; Step 5 — re-enable and validate all FK constraints
+    Local $sEnableFK = _
+        "DECLARE @sql NVARCHAR(MAX) = N''" & @CRLF & _
+        "SELECT @sql += N'ALTER TABLE [' + OBJECT_SCHEMA_NAME(parent_object_id) + '].[' + OBJECT_NAME(parent_object_id) + '] WITH CHECK CHECK CONSTRAINT [' + name + ']; '" & @CRLF & _
+        "FROM sys.foreign_keys" & @CRLF & _
+        "EXEC sp_executesql @sql"
+
+    Local $aTables[19] = [ _
+        "B_BT2",    "B_PREN2", "B_PROF",    "B_NOME", "E_OF2", _
+        "B_OF",     "B_SER",   "B_VER_ART", "B_ART",  "B_PHAS", _
+        "B_GAMM",   "B_CADE",  "B_OPE",     "B_MACH", "B_SECT", _
+        "B_ILOT",   "B_ZONE",  "B_PERI",    "B_CAL" _
+    ]
+
+    ; Step 2 — disable triggers on every target table
+    Local $sDisableTrig = _
+        "DECLARE @sql NVARCHAR(MAX) = N''" & @CRLF & _
+        "SELECT @sql += N'DISABLE TRIGGER ALL ON [' + OBJECT_SCHEMA_NAME(parent_id) + '].[' + OBJECT_NAME(parent_id) + ']; '" & @CRLF & _
+        "FROM sys.triggers" & @CRLF & _
+        "WHERE parent_class = 1 AND OBJECT_NAME(parent_id) IN (" & _TableListSQL($aTables) & ")" & @CRLF & _
+        "EXEC sp_executesql @sql"
+
+    ; Step 4 — re-enable triggers on every target table
+    Local $sEnableTrig = _
+        "DECLARE @sql NVARCHAR(MAX) = N''" & @CRLF & _
+        "SELECT @sql += N'ENABLE TRIGGER ALL ON [' + OBJECT_SCHEMA_NAME(parent_id) + '].[' + OBJECT_NAME(parent_id) + ']; '" & @CRLF & _
+        "FROM sys.triggers" & @CRLF & _
+        "WHERE parent_class = 1 AND OBJECT_NAME(parent_id) IN (" & _TableListSQL($aTables) & ")" & @CRLF & _
+        "EXEC sp_executesql @sql"
+
+    ; Build result array: [0]=count, [1..n]=statements
+    Local $nTotal = 2 + UBound($aTables) + 2   ; disableFK + disableTrig + deletes + enableTrig + enableFK
+    Local $aResult[$nTotal + 1]
+    $aResult[0] = $nTotal
+
+    Local $idx = 1
+    $aResult[$idx] = $sDisableFK
+    $idx += 1
+    $aResult[$idx] = $sDisableTrig
+    $idx += 1
+    For $i = 0 To UBound($aTables) - 1
+        $aResult[$idx] = "DELETE FROM [dbo].[" & $aTables[$i] & "]"
+        $idx += 1
+    Next
+    $aResult[$idx] = $sEnableTrig
+    $idx += 1
+    $aResult[$idx] = $sEnableFK
+
+    Return $aResult
+EndFunc
+
+; Helper: turns a string array into a SQL IN-list  e.g. 'B_GAMM','B_OF',...
 ;=============================================================================
-; LIMPAR BANCO
+; FK PRE-VALIDATION: check referential integrity before attempting import
+; Queries data in the ListViews against what already exists in the DB.
+; Logs each violation to log.txt and returns the count of issues found.
 ;=============================================================================
+;=============================================================================
+; FK PRE-VALIDATION: cross-check references WITHIN the import data
+; The DB was just cleared, so checking against the DB would always warn.
+; Instead we verify that IDs referenced in one tab exist in another tab.
+;=============================================================================
+Func _ValidateFKBeforeImport()
+    Local $nIssues = 0
+    _Log("=== FK Pre-validation started (checking import data consistency) ===")
+
+    ; Build lookup sets from each source tab (semicolon-delimited unique values)
+    Local $setCalIDs  = _LVColSet($g_hLV_Cal,  0)   ; Calendar IDs
+    Local $setOpeIDs  = _LVColSet($g_hLV_Ops,  0)   ; Operation IDs
+    Local $setRoutIDs = _LVColSet($g_hLV_Rout, 0)   ; Routing IDs
+    Local $setMatIDs  = _LVColSet($g_hLV_Mat,  0)   ; Item IDs
+
+    ; Machines col 10 = Calendar ID
+    $nIssues += _CrossCheck($g_hLV_Mach, 10, $setCalIDs,  "Machine -> Calendar")
+
+    ; Routings col 3 = Operation ID
+    $nIssues += _CrossCheck($g_hLV_Rout, 3,  $setOpeIDs,  "Routing -> Operation")
+
+    ; Items col 4 = Routing ID (optional — blank means no routing)
+    $nIssues += _CrossCheck($g_hLV_Mat,  4,  $setRoutIDs, "Item -> Routing", True)
+
+    ; Work Orders col 1 = Item ID
+    $nIssues += _CrossCheck($g_hLV_WO,   1,  $setMatIDs,  "WO -> Item")
+
+    ; Work Orders col 2 = Routing ID
+    $nIssues += _CrossCheck($g_hLV_WO,   2,  $setRoutIDs, "WO -> Routing")
+
+    ; BOM col 0 = Parent item ID
+    $nIssues += _CrossCheck($g_hLV_BOM,  0,  $setMatIDs,  "BOM -> Parent item")
+
+    ; BOM col 2 = Component item ID
+    $nIssues += _CrossCheck($g_hLV_BOM,  2,  $setMatIDs,  "BOM -> Component item")
+
+    If $nIssues = 0 Then
+        _Log("=== FK Pre-validation OK — all cross-references are consistent ===")
+    Else
+        _Log("=== FK Pre-validation: " & $nIssues & " issue(s) found — see above ===")
+    EndIf
+    Return $nIssues
+EndFunc
+
+; Build a semicolon-wrapped string of unique non-empty values from a ListView column
+; e.g.  ";Cal_1x8;Cal_2x8;"  so StringInStr(set, ";X;") works as exact match
+Func _LVColSet($hLV, $iCol)
+    Local $sSet = ";"
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        Local $sVal = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iCol), 3)
+        If $sVal <> "" And Not StringInStr($sSet, ";" & $sVal & ";") Then
+            $sSet &= $sVal & ";"
+        EndIf
+    Next
+    Return $sSet
+EndFunc
+
+; Cross-check: every non-empty value in column $iCol of $hLV must appear in $sSet
+Func _CrossCheck($hLV, $iCol, $sSet, $sDesc, $bAllowEmpty = False)
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        Local $sVal = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iCol), 3)
+        If $sVal = "" Then
+            If $bAllowEmpty Then ContinueLoop
+            $nIssues += 1
+            _Log("FK WARNING [" & $sDesc & "] row " & ($i + 1) & ": empty value")
+            ContinueLoop
+        EndIf
+        If Not StringInStr($sSet, ";" & $sVal & ";") Then
+            $nIssues += 1
+            _Log("FK WARNING [" & $sDesc & "] row " & ($i + 1) & ": '" & $sVal & "' not found in source tab")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _TableListSQL($aTbl)
+    Local $s = ""
+    For $i = 0 To UBound($aTbl) - 1
+        If $i > 0 Then $s &= ","
+        $s &= "'" & $aTbl[$i] & "'"
+    Next
+    Return $s
+EndFunc
+
 Func _ClearDatabase()
     If Not $g_bConnected Then
         MsgBox(48, "Warning", "Not connected to the database.")
@@ -1519,15 +1885,50 @@ Func _ClearDatabase()
         "WARNING: This action will DELETE ALL demo data from the database!" & @CRLF & @CRLF & _
         "Database: " & $g_sDatabase & @CRLF & @CRLF & "Do you want to continue?")
 
-    If $nRet = 6 Then
-        Local $oConn = ObjCreate("ADODB.Connection")
-        $oConn.Open($g_sConnStr)
-        $oConn.Execute(_GetClearSQL())
-        $oConn.Close()
-        _Log("Database cleared successfully.")
+    If $nRet <> 6 Then Return
+
+    Local $oConn = ObjCreate("ADODB.Connection")
+    If Not IsObj($oConn) Then
+        _Log("ERROR: Could not create connection object.")
+        Return
+    EndIf
+
+    $g_sLastComError = ""
+    $oConn.Open($g_sConnStr)
+    If $g_sLastComError <> "" Or $oConn.State <> 1 Then
+        _Log("ERROR opening connection for clear: " & $g_sLastComError)
+        MsgBox(16, "Error", "Could not open connection: " & @CRLF & $g_sLastComError)
+        Return
+    EndIf
+
+    Local $aStmts = _GetClearSQL()   ; array: [0]=count, [1..n]=statements
+    Local $nOK = 0, $nErr = 0
+
+    For $i = 1 To $aStmts[0]
+        Local $sStmt = StringStripWS($aStmts[$i], 3)
+        If $sStmt = "" Then ContinueLoop
+
+        $g_sLastComError = ""
+        $oConn.Execute($sStmt)
+        If $g_sLastComError <> "" Then
+            $nErr += 1
+            _Log("ERROR clear stmt " & $i & ": " & $g_sLastComError)
+        Else
+            $nOK += 1
+        EndIf
+    Next
+
+    $oConn.Close()
+
+    If $nErr = 0 Then
+        _Log("Database cleared successfully (" & $nOK & " statements OK).")
         MsgBox(64, "OK", "Demo data removed from the database successfully.")
+    Else
+        _Log("Clear completed with " & $nErr & " error(s) — check log.txt for details.")
+        MsgBox(48, "Completed with errors", "Clear finished with " & $nErr & " error(s)." & @CRLF & "Check the execution log and log.txt for details.")
     EndIf
 EndFunc
+
 
 ;=============================================================================
 ; IMPORTAR / EXPORTAR EXCEL
@@ -1582,9 +1983,34 @@ EndFunc
 ;=============================================================================
 ; LOG
 ;=============================================================================
-Func _Log($sMsg)
-    Local $sCurrent = GUICtrlRead($g_hExecLog)
-    GUICtrlSetData($g_hExecLog, "[" & @HOUR & ":" & @MIN & ":" & @SEC & "] " & $sMsg & @CRLF & $sCurrent)
+Func _Log($sMsg, $bErrorOnly = False)
+    Local $sTimestamp = "[" & @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & "]"
+    Local $sLine = $sTimestamp & " " & $sMsg
+
+    ; Always write to the on-screen exec log (newest entry on top)
+    If Not $bErrorOnly Then
+        Local $sCurrent = GUICtrlRead($g_hExecLog)
+        GUICtrlSetData($g_hExecLog, $sLine & @CRLF & $sCurrent)
+    EndIf
+
+    ; Always append to log.txt (full history, never truncated during a session)
+    Local $sLogFile = @ScriptDir & "\log.txt"
+    Local $hFile = FileOpen($sLogFile, 1)   ; 1 = append
+    If $hFile <> -1 Then
+        FileWriteLine($hFile, $sLine)
+        FileClose($hFile)
+    EndIf
+EndFunc
+
+; Write a separator line to log.txt at startup so sessions are clearly delimited
+Func _LogSessionStart()
+    Local $sLogFile = @ScriptDir & "\log.txt"
+    Local $hFile = FileOpen($sLogFile, 1)
+    If $hFile <> -1 Then
+        FileWriteLine($hFile, "")
+        FileWriteLine($hFile, "========== SESSION STARTED: " & @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & " ==========")
+        FileClose($hFile)
+    EndIf
 EndFunc
 
 ;=============================================================================
@@ -1595,7 +2021,7 @@ EndFunc
 ; UI: MODULE SELECTION -> ENABLE/DISABLE TABS (real-time)
 ;=============================================================================
 Func _OnModuleSelectionChanged()
-    _RefreshModuleFlags(True)
+;~     _RefreshModuleFlags(True)
 EndFunc
 
 Func _RefreshModuleFlags($bSilent = True)
@@ -1634,6 +2060,8 @@ Func _RefreshModuleFlags($bSilent = True)
 
     _UpdateTabAvailability()
 
+    _SaveSettings()   ; persist module selections automatically
+
     If Not $bSilent Then
         Local $sMode = ($g_bModPS ? "PS" : "MP")
         Local $sMods = ""
@@ -1659,7 +2087,7 @@ Func _UpdateTabAvailability()
     Local $bPS = $g_bModPS
     Local $bMP = $g_bModMP
 
-    ; Core tabs
+    ; Core tabs (always enabled)
     Local $bCal  = True
     Local $bMach = True
     Local $bMat  = True
@@ -1671,7 +2099,7 @@ Func _UpdateTabAvailability()
     Local $bWO   = $bPS
     Local $bWOL  = ($bPS And $g_bModWOL)
     Local $bSR   = ($bPS And $g_bModSR)
-    Local $bCap  = ($g_bModLR Or $bMP) ; Capacity shown when needed for Limited Resources or in MP mode
+    Local $bCap  = ($g_bModLR Or $bMP)
     Local $bStk  = $g_bModINV
 
     _GUICtrlTab_EnableTab($hTab, $g_iTabCal,  $bCal)
@@ -1686,18 +2114,19 @@ Func _UpdateTabAvailability()
     _GUICtrlTab_EnableTab($hTab, $g_iTabCap,  $bCap)
     _GUICtrlTab_EnableTab($hTab, $g_iTabStk,  $bStk)
 
-    ; If current tab became disabled, move back to Modules
+    ; If the currently visible tab just became disabled, bounce back to Modules
     Local $iCur = _GUICtrlTab_GetCurSel($hTab)
-    If ($iCur = $g_iTabOps And Not $bOps) Or _
-       ($iCur = $g_iTabRout And Not $bRout) Or _
-       ($iCur = $g_iTabBOM And Not $bBOM) Or _
-       ($iCur = $g_iTabWO And Not $bWO) Or _
-       ($iCur = $g_iTabWOL And Not $bWOL) Or _
-       ($iCur = $g_iTabSR And Not $bSR) Or _
-       ($iCur = $g_iTabCap And Not $bCap) Or _
-       ($iCur = $g_iTabStk And Not $bStk) Then
+    If Not _TabIsEnabled($iCur) Then
+        $g_bAllowProgrammaticTabChange = True
         _GUICtrlTab_SetCurSel($hTab, $g_iTabMod)
+        $g_bAllowProgrammaticTabChange = False
     EndIf
+
+    ; Force a full repaint so AutoIt re-draws all tab child controls correctly.
+    ; Without this, any TCM_SETITEM call above leaves controls visually stale
+    ; (blank until mouse-over triggers a WM_PAINT).
+    DllCall("user32.dll", "bool", "RedrawWindow", "hwnd", $g_hMain, "ptr", 0, "ptr", 0, "uint", 0x0185)
+    ; 0x0185 = RDW_INVALIDATE(0x01) | RDW_ERASE(0x04) | RDW_ALLCHILDREN(0x80) | RDW_UPDATENOW(0x100)
 EndFunc
 ;=============================================================================
 ; TAB: Enable/disable emulation
@@ -1718,20 +2147,24 @@ Func _InitTabState()
     Next
 EndFunc
 
-; Keep signature compatible with the (non-existent) UDF function name used in older snippets
 Func _GUICtrlTab_EnableTab($hTab, $iIndex, $bEnable)
     If $hTab = 0 Then Return
     If $iIndex < 0 Then Return
     If UBound($g_aTabEnabled) = 0 Then _InitTabState()
     If $iIndex >= UBound($g_aTabEnabled) Then Return
 
-    $g_aTabEnabled[$iIndex] = ($bEnable <> 0)
+    Local $bNewState = ($bEnable <> 0)
+
+    ; Skip if state has not changed — avoids TCM_SETITEM redraw that wipes tab controls
+    If $g_aTabEnabled[$iIndex] = $bNewState Then Return
+
+    $g_aTabEnabled[$iIndex] = $bNewState
 
     Local $sBase = $g_aTabBaseText[$iIndex]
     If $sBase = "" Then $sBase = _GUICtrlTab_GetItemText($hTab, $iIndex)
 
     If Not $g_aTabEnabled[$iIndex] Then
-        _GUICtrlTab_SetItemText($hTab, $iIndex, $sBase & " (off)")
+        _GUICtrlTab_SetItemText($hTab, $iIndex, $sBase & " [off]")
     Else
         _GUICtrlTab_SetItemText($hTab, $iIndex, $sBase)
     EndIf
@@ -1744,28 +2177,34 @@ Func _TabIsEnabled($iIndex)
 EndFunc
 
 Func _WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
+    If $g_hTabHandle = 0 Then Return $GUI_RUNDEFMSG
+
     Local $tNMHDR = DllStructCreate($tagNMHDR, $lParam)
-    Local $hFrom = HWnd(DllStructGetData($tNMHDR, "hWndFrom"))
+    Local $hFrom  = HWnd(DllStructGetData($tNMHDR, "hWndFrom"))
+    If $hFrom <> $g_hTabHandle Then Return $GUI_RUNDEFMSG
+
     Local $iCode = DllStructGetData($tNMHDR, "Code")
 
-    If $g_hTabHandle <> 0 And $hFrom = $g_hTabHandle Then
-        Switch $iCode
-            Case $TCN_SELCHANGING
-                If $g_bAllowProgrammaticTabChange Then Return $GUI_RUNDEFMSG
+    Switch $iCode
+        Case $TCN_SELCHANGE
+            ; Skip if this notification was raised by our own programmatic switch
+            If $g_bAllowProgrammaticTabChange Then Return $GUI_RUNDEFMSG
 
-                ; When the user clicks another tab, 'focus' moves first.
-                Local $iFocus = _GUICtrlTab_GetCurFocus($g_hTabHandle)
-                If Not _TabIsEnabled($iFocus) Then
-                    ; Block the selection change
-                    If $g_lblFooter <> 0 Then GUICtrlSetData($g_lblFooter, "Tab disabled. Enable it in 2. Modules.")
-                    Return 1
-                EndIf
+            Local $iNew = _GUICtrlTab_GetCurSel($g_hTabHandle)
+            If Not _TabIsEnabled($iNew) Then
+                ; User clicked a disabled tab — bounce back to Modules immediately
+                $g_bAllowProgrammaticTabChange = True
+                _GUICtrlTab_SetCurSel($g_hTabHandle, $g_iTabMod)
+                $g_bAllowProgrammaticTabChange = False
 
-            Case $TCN_SELCHANGE
-                ; Restore footer text (optional)
+                ; Force repaint so the Modules tab content reappears cleanly
+                DllCall("user32.dll", "bool", "RedrawWindow", "hwnd", $g_hMain, "ptr", 0, "ptr", 0, "uint", 0x0185)
+
+                If $g_lblFooter <> 0 Then GUICtrlSetData($g_lblFooter, "Tab [off] — enable the module in tab 2. Modules.")
+            Else
                 If $g_lblFooter <> 0 Then GUICtrlSetData($g_lblFooter, $TITLE & " | Replaces Toolbox_v2.0.1.xlsm | " & @YEAR)
-        EndSwitch
-    EndIf
+            EndIf
+    EndSwitch
 
     Return $GUI_RUNDEFMSG
 EndFunc
@@ -1791,20 +2230,21 @@ Func _LayoutMain($w, $h)
     ; Bottom separator line
     If $g_idBottomLine <> 0 Then GUICtrlSetPos($g_idBottomLine, 0, $bottomBarTop + 5, $w, 2)
 
-    ; Bottom buttons
+    ; Bottom toolbar buttons
     Local $yBtn = $bottomBarTop + 12
-    If IsDeclared("g_btnImportXLS") Then GUICtrlSetPos($g_btnImportXLS, 10, $yBtn, 140, 32)
-    If IsDeclared("g_btnExportXLS") Then GUICtrlSetPos($g_btnExportXLS, 160, $yBtn, 140, 32)
-    If IsDeclared("g_btnClearDB")   Then GUICtrlSetPos($g_btnClearDB,   310, $yBtn, 130, 32)
-    If IsDeclared("g_btnGenerate")  Then GUICtrlSetPos($g_btnGenerate,  460, $yBtn, 130, 32)
-    If IsDeclared("g_btnExecute")   Then GUICtrlSetPos($g_btnExecute,   600, $yBtn, 170, 32)
-    If IsDeclared("g_btnSaveSQL")   Then GUICtrlSetPos($g_btnSaveSQL,   780, $yBtn, 130, 32)
+    If IsDeclared("g_btnImportXLS") Then GUICtrlSetPos($g_btnImportXLS, 10,  $yBtn, 140, 32)
+    If IsDeclared("g_btnExportXLS") Then GUICtrlSetPos($g_btnExportXLS, 158, $yBtn, 140, 32)
+    If IsDeclared("g_btnClearDB")   Then GUICtrlSetPos($g_btnClearDB,   306, $yBtn, 110, 32)
+    If IsDeclared("g_btnGenerate")  Then GUICtrlSetPos($g_btnGenerate,  424, $yBtn, 140, 32)
+    If IsDeclared("g_btnExecute")   Then GUICtrlSetPos($g_btnExecute,   572, $yBtn, 150, 32)
+    If IsDeclared("g_btnSaveSQL")   Then GUICtrlSetPos($g_btnSaveSQL,   730, $yBtn, 120, 32)
+    If $g_lblFooter <> 0 Then GUICtrlSetPos($g_lblFooter, $w - 210, $yBtn + 14, 200, 18)
 
-    ; Footer
-    If $g_lblFooter <> 0 Then GUICtrlSetPos($g_lblFooter, $w - 220, $yBtn + 13, 210, 18)
+    ; Usable content area bottom edge (inside the tab, minus a small margin)
+    Local $tabInnerBottom = $bottomBarTop - $TAB_TOP_Y - 30
+    Local $bottomContent  = $TAB_TOP_Y + $tabInnerBottom - 8
 
-    ; Resize ListViews/Edit areas to the available height (best-effort)
-    Local $bottomContent = $bottomBarTop - 15
+    ; Resize all ListViews to fill available height
     _ResizeToBottom($g_hLV_Cal,  $w, $bottomContent)
     _ResizeToBottom($g_hLV_Mach, $w, $bottomContent)
     _ResizeToBottom($g_hLV_Ops,  $w, $bottomContent)
@@ -1817,45 +2257,152 @@ Func _LayoutMain($w, $h)
     _ResizeToBottom($g_hLV_Cap,  $w, $bottomContent)
     _ResizeToBottom($g_hLV_Stk,  $w, $bottomContent)
 
-    ; SQL tab: resize main SQL box and exec log if present
+    ; SQL tab: the exec log is anchored 95px above the bottom content edge.
+    ; The SQL edit box fills the space above it.
+    If IsDeclared("g_hExecLog") Then
+        Local $yExec = $bottomContent - 75
+        If $yExec < 400 Then $yExec = 400
+        GUICtrlSetPos($g_hExecLog, 20, $yExec, $w - 40, 55)
+    EndIf
     If $g_hLog <> 0 Then
-        Local $p = ControlGetPos($g_hMain, "", $g_hLog)
+        Local $pLog = ControlGetPos($g_hMain, "", $g_hLog)
         If Not @error Then
-            Local $newW = $w - 40
-            Local $newH = ($bottomContent - 105) - $p[1]
+            Local $logBottom = (IsDeclared("g_hExecLog") ? ($bottomContent - 95) : $bottomContent)
+            Local $newH = $logBottom - $pLog[1]
             If $newH < 120 Then $newH = 120
-            GUICtrlSetPos($g_hLog, $p[0], $p[1], $newW, $newH)
+            GUICtrlSetPos($g_hLog, $pLog[0], $pLog[1], $w - 40, $newH)
         EndIf
     EndIf
-    If IsDeclared("g_hExecLog") Then
-        Local $yExec = $bottomContent - 80
-        If $yExec < 260 Then $yExec = 260
-        GUICtrlSetPos($g_hExecLog, 20, $yExec, $w - 40, 60)
-    EndIf
-
-    ; Modules tab: keep hint aligned to bottom of tab content (no reposition needed - placed by $y)
 EndFunc
 
 Func _ResizeToBottom($ctrlId, $w, $bottomY)
     If $ctrlId = 0 Then Return
     Local $p = ControlGetPos($g_hMain, "", $ctrlId)
     If @error Then Return
-    Local $newW = $w - 40
     Local $newH = $bottomY - $p[1]
-    If $newH < 120 Then $newH = 120
-    GUICtrlSetPos($ctrlId, $p[0], $p[1], $newW, $newH)
+    If $newH < 80 Then $newH = 80
+    GUICtrlSetPos($ctrlId, $p[0], $p[1], $w - 40, $newH)
 EndFunc
 
-; Enforce a minimum window size (prevents overlap when resizing smaller than the UI layout)
+; Enforce minimum window size
 Func _WM_GETMINMAXINFO($hWnd, $iMsg, $wParam, $lParam)
     Local $tMMI = DllStructCreate("long;long;long;long;long;long;long;long;long;long", $lParam)
-    DllStructSetData($tMMI, 7, $MIN_W) ; ptMinTrackSize.x
-    DllStructSetData($tMMI, 8, $MIN_H) ; ptMinTrackSize.y
+    DllStructSetData($tMMI, 7, $MIN_W)
+    DllStructSetData($tMMI, 8, $MIN_H)
     Return 0
 EndFunc
 
-
 Func _OnClose()
+    _SaveSettings()
     Local $nRet = MsgBox(4 + 32, "Exit", "Do you want to exit Ortems Toolbox?" & @CRLF & @CRLF & "Unsaved data will be lost.")
     If $nRet = 6 Then Exit
+EndFunc
+
+;=============================================================================
+; SETTINGS: LOAD / SAVE  (settings.ini next to the .au3 / .exe)
+;=============================================================================
+Func _SaveSettings()
+    ; [Connection]
+    IniWrite($g_sIniFile, "Connection", "Server",   GUICtrlRead($g_edtServer))
+    IniWrite($g_sIniFile, "Connection", "Database", GUICtrlRead($g_edtDatabase))
+    IniWrite($g_sIniFile, "Connection", "Auth",     GUICtrlRead($g_cmbAuth))
+    IniWrite($g_sIniFile, "Connection", "User",     GUICtrlRead($g_edtUser))
+    ; NOTE: password is NOT saved for security reasons
+
+    ; [Modules]
+    IniWrite($g_sIniFile, "Modules", "Mode",   ($g_bModPS ? "PS" : "MP"))
+    IniWrite($g_sIniFile, "Modules", "SRP",    ($g_bModSRP   ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "WOL",    ($g_bModWOL   ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "SR",     ($g_bModSR    ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "INV",    ($g_bModINV   ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "MRK",    ($g_bModMRK   ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "LR",     ($g_bModLR    ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "PRM",    ($g_bModPRM   ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "BATCH",  ($g_bModBATCH ? "1" : "0"))
+    IniWrite($g_sIniFile, "Modules", "CROUT",  ($g_bModCROUT ? "1" : "0"))
+
+    ; [SQL]
+    If IsDeclared("g_chkClearFirst") Then
+        IniWrite($g_sIniFile, "SQL", "ClearFirst",  (GUICtrlRead($g_chkClearFirst)  = $GUI_CHECKED ? "1" : "0"))
+        IniWrite($g_sIniFile, "SQL", "Transaction", (GUICtrlRead($g_chkTransaction) = $GUI_CHECKED ? "1" : "0"))
+    EndIf
+
+    ; [Window]
+    Local $aPos = WinGetPos($g_hMain)
+    If Not @error Then
+        IniWrite($g_sIniFile, "Window", "X", $aPos[0])
+        IniWrite($g_sIniFile, "Window", "Y", $aPos[1])
+        IniWrite($g_sIniFile, "Window", "W", $aPos[2])
+        IniWrite($g_sIniFile, "Window", "H", $aPos[3])
+    EndIf
+EndFunc
+
+Func _LoadSettings()
+    If Not FileExists($g_sIniFile) Then Return   ; first run, keep defaults
+
+    ; [Connection]
+    Local $sServer = IniRead($g_sIniFile, "Connection", "Server",   "")
+    Local $sDB     = IniRead($g_sIniFile, "Connection", "Database", "")
+    Local $sAuth   = IniRead($g_sIniFile, "Connection", "Auth",     "Windows Authentication")
+    Local $sUser   = IniRead($g_sIniFile, "Connection", "User",     "")
+
+    If $sServer <> "" Then GUICtrlSetData($g_edtServer,   $sServer)
+    If $sDB     <> "" Then GUICtrlSetData($g_edtDatabase, $sDB)
+    GUICtrlSetData($g_cmbAuth, $sAuth)
+    _OnAuthChange()   ; enable/disable user+pass fields based on auth type
+    If $sUser <> "" Then GUICtrlSetData($g_edtUser, $sUser)
+
+    ; [Modules]
+    Local $sMode = IniRead($g_sIniFile, "Modules", "Mode", "PS")
+    If $sMode = "MP" Then
+        GUICtrlSetState($g_rbMP, $GUI_CHECKED)
+        GUICtrlSetState($g_rbPS, $GUI_UNCHECKED)
+    Else
+        GUICtrlSetState($g_rbPS, $GUI_CHECKED)
+        GUICtrlSetState($g_rbMP, $GUI_UNCHECKED)
+    EndIf
+
+    Local $aChks[][2] = [ _
+        [$g_chkSRP,   IniRead($g_sIniFile, "Modules", "SRP",   "0")], _
+        [$g_chkWOL,   IniRead($g_sIniFile, "Modules", "WOL",   "0")], _
+        [$g_chkSR,    IniRead($g_sIniFile, "Modules", "SR",    "0")], _
+        [$g_chkINV,   IniRead($g_sIniFile, "Modules", "INV",   "0")], _
+        [$g_chkMRK,   IniRead($g_sIniFile, "Modules", "MRK",   "0")], _
+        [$g_chkLR,    IniRead($g_sIniFile, "Modules", "LR",    "0")], _
+        [$g_chkPRM,   IniRead($g_sIniFile, "Modules", "PRM",   "0")], _
+        [$g_chkBATCH, IniRead($g_sIniFile, "Modules", "BATCH", "0")], _
+        [$g_chkCROUT, IniRead($g_sIniFile, "Modules", "CROUT", "0")] _
+    ]
+    For $i = 0 To UBound($aChks) - 1
+        If $aChks[$i][1] = "1" Then
+            GUICtrlSetState($aChks[$i][0], $GUI_CHECKED)
+        Else
+            GUICtrlSetState($aChks[$i][0], $GUI_UNCHECKED)
+        EndIf
+    Next
+
+    ; [SQL]
+    If IniRead($g_sIniFile, "SQL", "ClearFirst", "1") = "1" Then
+        GUICtrlSetState($g_chkClearFirst, $GUI_CHECKED)
+    Else
+        GUICtrlSetState($g_chkClearFirst, $GUI_UNCHECKED)
+    EndIf
+    If IniRead($g_sIniFile, "SQL", "Transaction", "1") = "1" Then
+        GUICtrlSetState($g_chkTransaction, $GUI_CHECKED)
+    Else
+        GUICtrlSetState($g_chkTransaction, $GUI_UNCHECKED)
+    EndIf
+
+    ; [Window] - restore size/position
+    Local $iX = Int(IniRead($g_sIniFile, "Window", "X", "-1"))
+    Local $iY = Int(IniRead($g_sIniFile, "Window", "Y", "-1"))
+    Local $iW = Int(IniRead($g_sIniFile, "Window", "W", $APP_WIDTH))
+    Local $iH = Int(IniRead($g_sIniFile, "Window", "H", $APP_HEIGHT))
+    If $iW < $MIN_W Then $iW = $MIN_W
+    If $iH < $MIN_H Then $iH = $MIN_H
+    ; Clamp to screen bounds
+    Local $iSW = @DesktopWidth, $iSH = @DesktopHeight
+    If $iX < 0 Or $iX > $iSW - 100 Then $iX = -1
+    If $iY < 0 Or $iY > $iSH - 100 Then $iY = -1
+    If $iX <> -1 Then WinMove($g_hMain, "", $iX, $iY, $iW, $iH)
 EndFunc
