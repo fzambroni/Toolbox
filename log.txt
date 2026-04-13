@@ -1,109 +1,72 @@
 
-========== SESSION STARTED: 2026-03-27 15:50:01 ==========
-[2026-03-27 15:50:09] SQL generated successfully. 12492 caracteres.
-[2026-03-27 15:50:12] ERROR (stmt 63): COM Error 0x80020009: [Microsoft][ODBC SQL Server Driver][SQL Server]Invalid column name 'QTEBASET'.
-[2026-03-27 15:50:12]   >> INSERT INTO B_NOME (B_V_CODEARTIC, VER_ART, CODEARTIC, NOMG, NOPHASE, QTEBASET, QTEBESO)
-    VALUES ('STD_Caixa', 'STD'
-[2026-03-27 15:50:12] Transaction ROLLED BACK due to error.
+========== SESSION STARTED: 2026-04-02 16:18:23 ==========
+[2026-04-02 16:18:56] === Load from DB started ===
+[2026-04-02 16:18:56] Calendars loaded: 55 rows
+[2026-04-02 16:18:56] Machines loaded: 12 rows
+[2026-04-02 16:18:56] Operations loaded: 35 rows
+[2026-04-02 16:18:56] Routings loaded: 39 rows
+[2026-04-02 16:18:56] Materials loaded: 39 rows
+[2026-04-02 16:18:56] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-02 16:18:56] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-02 16:18:56] BOM loaded: 96 rows
+[2026-04-02 16:18:56] B_OF schema: column 'QTE' used for qty_order
+[2026-04-02 16:18:56] Work Orders loaded: 34 rows
+[2026-04-02 16:18:56] === Load from DB complete — 7 tab(s) populated ===
+[2026-04-02 16:21:02] === Load from DB started ===
+[2026-04-02 16:21:02] Calendars loaded: 55 rows
+[2026-04-02 16:21:02] Machines loaded: 12 rows
+[2026-04-02 16:21:02] Operations loaded: 35 rows
+[2026-04-02 16:21:02] Routings loaded: 39 rows
+[2026-04-02 16:21:02] Materials loaded: 39 rows
+[2026-04-02 16:21:03] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-02 16:21:03] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-02 16:21:03] BOM loaded: 96 rows
+[2026-04-02 16:21:03] B_OF schema: column 'QTE' used for qty_order
+[2026-04-02 16:21:03] Work Orders loaded: 34 rows
+[2026-04-02 16:21:03] === Load from DB complete — 7 tab(s) populated ===
+[2026-04-02 16:22:15] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-02 16:22:15] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-02 16:22:15] B_OF schema: column 'QTE' used for qty_order
+[2026-04-02 16:22:15] B_OF schema: column for mode_util not present in this version (optional)
+[2026-04-02 16:22:15] SQL generated successfully. 95879 caracteres.
 
-========== SESSION STARTED: 2026-03-27 16:03:58 ==========
-[2026-03-27 16:04:03] WARNING: Could not detect B_NOME column for qty_base. Actual columns:;B_V_CODEARTIC;VER_ART;VER_EFFET_DEBUT;VER_EFFET_FIN;NOMG;NOPHASE;CODEARTIC;MODE_UTIL;QTEREF;QTENEC;NOME_TYPEPREC;NOME_PROPPREC;NOME_LIENMAT;NOME_LIENCNX;NOME_TAUXCHEVA;NOME_LOI_CONS;NOME_LOI_CALCUL;LIEN_STOCK;QTEINC;STATBOM;CNTER;ACTIF;RESERVED1;RESERVED2;RESERVED3;RESERVED4;RESERVED5;UE_RESERVED1;UE_RESERVED2;UE_RESERVED3;FREE1;FREE2;FREE3;FREE4;FREE5;NOME_DATECRE;NOME_USERCRE;NOME_DATEMOD;NOME_USERMOD
-[2026-03-27 16:04:04] WARNING: Could not detect B_NOME column for qty_nec. Actual columns:;B_V_CODEARTIC;VER_ART;VER_EFFET_DEBUT;VER_EFFET_FIN;NOMG;NOPHASE;CODEARTIC;MODE_UTIL;QTEREF;QTENEC;NOME_TYPEPREC;NOME_PROPPREC;NOME_LIENMAT;NOME_LIENCNX;NOME_TAUXCHEVA;NOME_LOI_CONS;NOME_LOI_CALCUL;LIEN_STOCK;QTEINC;STATBOM;CNTER;ACTIF;RESERVED1;RESERVED2;RESERVED3;RESERVED4;RESERVED5;UE_RESERVED1;UE_RESERVED2;UE_RESERVED3;FREE1;FREE2;FREE3;FREE4;FREE5;NOME_DATECRE;NOME_USERCRE;NOME_DATEMOD;NOME_USERMOD
-[2026-03-27 16:04:04] SQL generated successfully. 12492 caracteres.
-[2026-03-27 16:04:07] ERROR (stmt 63): COM Error 0x80020009: [Microsoft][ODBC SQL Server Driver][SQL Server]Invalid column name 'QTEBASET'.
-[2026-03-27 16:04:07]   >> INSERT INTO B_NOME (B_V_CODEARTIC, VER_ART, CODEARTIC, NOMG, NOPHASE, QTEBASET, QTEBESO)
-    VALUES ('STD_Caixa', 'STD'
-[2026-03-27 16:04:07] Transaction ROLLED BACK due to error.
+========== SESSION STARTED: 2026-04-02 16:23:12 ==========
+[2026-04-02 16:24:10] === Load from DB started ===
+[2026-04-02 16:24:10] Calendars loaded: 55 rows
+[2026-04-02 16:24:10] Machines loaded: 12 rows
+[2026-04-02 16:24:10] Operations loaded: 35 rows
+[2026-04-02 16:24:10] Routings loaded: 39 rows
+[2026-04-02 16:24:10] Materials loaded: 39 rows
+[2026-04-02 16:24:10] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-02 16:24:11] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-02 16:24:11] BOM loaded: 96 rows
+[2026-04-02 16:24:11] B_OF schema: column 'QTE' used for qty_order
+[2026-04-02 16:24:11] Work Orders loaded: 34 rows
+[2026-04-02 16:24:11] WO Links loaded: 0 rows
+[2026-04-02 16:24:11] === Load from DB complete — 8 tab(s) populated ===
+[2026-04-02 16:24:33] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-02 16:24:33] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-02 16:24:33] B_OF schema: column 'QTE' used for qty_order
+[2026-04-02 16:24:33] B_OF schema: column for mode_util not present in this version (optional)
+[2026-04-02 16:24:33] SQL generated successfully. 95879 caracteres.
+[2026-04-02 16:24:49] Data exported to: E:\GitHub\Toolbox\ortems_demo_export.csv
 
-========== SESSION STARTED: 2026-03-27 16:09:19 ==========
-[2026-03-27 16:09:35] B_NOME schema: using column 'QTEREF' for qty_base
-[2026-03-27 16:09:35] B_NOME schema: using column 'QTENEC' for qty_nec
-[2026-03-27 16:09:35] SQL generated successfully. 12477 caracteres.
-[2026-03-27 16:09:38] ERROR (stmt 68): COM Error 0x80020009: [Microsoft][ODBC SQL Server Driver][SQL Server]Invalid column name 'QTEORDER'.
-[2026-03-27 16:09:38]   >> INSERT INTO B_OF (NOF, CODEARTIC, NOMG, VER_ART, QTEORDER, DPLUSTOT, FPLUSTARD,
-    CODEGEST, ETATOF, VER_EFFET_DEBUT, 
-[2026-03-27 16:09:38] Transaction ROLLED BACK due to error.
-
-========== SESSION STARTED: 2026-03-27 16:16:47 ==========
-[2026-03-27 16:16:57] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-03-27 16:16:57] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-03-27 16:16:57] WARNING: No match in B_OF for qty_order. Actual:;NOF;NOMG;SERIE;UTIL;TYP_PIECE;CODEARTIC;VER_ART;VER_EFFET_DEBUT;VER_EFFET_FIN;LIBEOF;CODECLIEN;DPLUSTOT;FPLUSTARD;PRIORITE;CODEGROUP;CODECOUL;QTE;ETATOF;OF_PCB;CODEGEST;PARTIC;OF_CH_LIBR1;OF_CH_DESC1;OF_C_DUE_DATE;CONSOMMABLE;RATTACHE_BES;VER_FIGEE;VER_UPD;CORRESP_SCP;LBE_PARAM_LOCAUX;LBE_MARGE_AVANCE;LBE_CTRL_AVANCE;LBE_MARGE_RETARD;LBE_CTRL_RETARD;LBE_STATUT;LBE_SPECIF;DATE_DEB_OBJ;DATE_FIN_OBJ;AVAILABILITY_DATE;ORDER_REF;INIT_EXPIRATION_DATE;LOT_NUMBER;NO_SOUS_GRPH;URL;RESERVED1;RESERVED2;RESERVED3;RESERVED4;RESERVED5;UE_RESERVED1;UE_RESERVED2;UE_RESERVED3;UE_RESERVED4;UE_RESERVED5;FREE1;FREE2;FREE3;FREE4;FREE5;FREE6;FREE7;FREE8;FREE9;FREE10;FREE11;FREE12;FREE13;FREE14;FREE15;OF_DATECRE;OF_USERCRE;OF_DATEMOD;OF_USERMOD
-[2026-03-27 16:16:57] SQL generated successfully. 12477 caracteres.
-[2026-03-27 16:16:59] === FK Pre-validation started ===
-[2026-03-27 16:16:59] FK WARNING [Machine->Calendar (NOCALHEBD)]: value 'Cal_1x8' not found in B_CAL.NOCALHEBD
-[2026-03-27 16:16:59] FK WARNING [Machine->Calendar (NOCALHEBD)]: value 'Cal_1x8' not found in B_CAL.NOCALHEBD
-[2026-03-27 16:16:59] FK WARNING [Machine->Calendar (NOCALHEBD)]: value 'Cal_1x8' not found in B_CAL.NOCALHEBD
-[2026-03-27 16:16:59] FK WARNING [Machine->Calendar (NOCALHEBD)]: value 'Cal_2x8' not found in B_CAL.NOCALHEBD
-[2026-03-27 16:16:59] FK WARNING [Machine->WorkCenter (ILOT)]: value 'Milling' not found in B_ILOT.ILOT
-[2026-03-27 16:16:59] FK WARNING [Machine->WorkCenter (ILOT)]: value 'Milling' not found in B_ILOT.ILOT
-[2026-03-27 16:16:59] FK WARNING [Machine->WorkCenter (ILOT)]: value 'Drilling' not found in B_ILOT.ILOT
-[2026-03-27 16:16:59] FK WARNING [Machine->WorkCenter (ILOT)]: value 'Assembly_Robot' not found in B_ILOT.ILOT
-[2026-03-27 16:16:59] FK WARNING [Routing->Operation (OPE)]: value 'MILL' not found in B_OPE.OPE
-[2026-03-27 16:16:59] FK WARNING [Routing->Operation (OPE)]: value 'MILL' not found in B_OPE.OPE
-[2026-03-27 16:16:59] FK WARNING [Routing->Operation (OPE)]: value 'MILL' not found in B_OPE.OPE
-[2026-03-27 16:16:59] FK WARNING [Routing->Operation (OPE)]: value 'DRIL' not found in B_OPE.OPE
-[2026-03-27 16:16:59] FK WARNING [Routing->Operation (OPE)]: value 'ASSY' not found in B_OPE.OPE
-[2026-03-27 16:16:59] FK WARNING [Routing->Operation (OPE)]: value 'ASSY' not found in B_OPE.OPE
-[2026-03-27 16:16:59] FK WARNING [Item->Routing (NOMG)]: value 'STD_AX' not found in B_GAMM.NOMG
-[2026-03-27 16:16:59] FK WARNING [Item->Routing (NOMG)]: value 'SPT_AX' not found in B_GAMM.NOMG
-[2026-03-27 16:16:59] FK WARNING [Item->Routing (NOMG)]: value 'CT' not found in B_GAMM.NOMG
-[2026-03-27 16:16:59] FK WARNING [Item->Routing (NOMG)]: value 'STD_GB' not found in B_GAMM.NOMG
-[2026-03-27 16:16:59] FK WARNING [Item->Routing (NOMG)]: value 'SPT_GB' not found in B_GAMM.NOMG
-[2026-03-27 16:16:59] FK WARNING [WO->Item (CODEARTIC)]: value 'STD_Caixa' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [WO->Item (CODEARTIC)]: value 'STD_Caixa' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [WO->Item (CODEARTIC)]: value 'SPT_Caixa' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [WO->Routing (NOMG)]: value 'STD_GB' not found in B_GAMM.NOMG
-[2026-03-27 16:16:59] FK WARNING [WO->Routing (NOMG)]: value 'STD_GB' not found in B_GAMM.NOMG
-[2026-03-27 16:16:59] FK WARNING [WO->Routing (NOMG)]: value 'SPT_GB' not found in B_GAMM.NOMG
-[2026-03-27 16:16:59] FK WARNING [BOM->ParentItem (CODEARTIC)]: value 'STD_Caixa' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [BOM->ParentItem (CODEARTIC)]: value 'STD_Caixa' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [BOM->ParentItem (CODEARTIC)]: value 'STD_Caixa' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [BOM->ParentItem (CODEARTIC)]: value 'SPT_Caixa' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [BOM->ParentItem (CODEARTIC)]: value 'SPT_Caixa' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [BOM->ComponentItem (CODEARTIC)]: value 'R_Eixos' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [BOM->ComponentItem (CODEARTIC)]: value 'STD_Eixos' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [BOM->ComponentItem (CODEARTIC)]: value 'Carter' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [BOM->ComponentItem (CODEARTIC)]: value 'R_Eixos' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] FK WARNING [BOM->ComponentItem (CODEARTIC)]: value 'SPT_Eixos' not found in B_ART.CODEARTIC
-[2026-03-27 16:16:59] === FK Pre-validation complete: 35 issue(s) found — see above ===
-[2026-03-27 16:17:02] ERROR (stmt 68): COM Error 0x80020009: [Microsoft][ODBC SQL Server Driver][SQL Server]Invalid column name 'QTEORDER'.
-[2026-03-27 16:17:02]   >> INSERT INTO B_OF (NOF, CODEARTIC, NOMG, VER_ART, QTEORDER, DPLUSTOT, FPLUSTARD,
-    CODEGEST, ETATOF, VER_EFFET_DEBUT, 
-[2026-03-27 16:17:02] Transaction ROLLED BACK due to error.
-
-========== SESSION STARTED: 2026-03-27 16:25:10 ==========
-[2026-03-27 16:25:16] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-03-27 16:25:16] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-03-27 16:25:17] B_OF schema: column 'QTE' used for qty_order
-[2026-03-27 16:25:17] SQL generated successfully. 12462 caracteres.
-[2026-03-27 16:25:19] === FK Pre-validation started (checking import data consistency) ===
-[2026-03-27 16:25:19] === FK Pre-validation OK — all cross-references are consistent ===
-[2026-03-27 16:25:20] ERROR (stmt 68): COM Error 0x80020009: [Microsoft][ODBC SQL Server Driver][SQL Server]Invalid column name 'MODE_UTIL'.
-[2026-03-27 16:25:20]   >> INSERT INTO B_OF (NOF, CODEARTIC, NOMG, VER_ART, QTE, DPLUSTOT, FPLUSTARD,
-    CODEGEST, ETATOF, VER_EFFET_DEBUT, VER_E
-[2026-03-27 16:25:20] Transaction ROLLED BACK due to error.
-
-========== SESSION STARTED: 2026-03-27 16:26:53 ==========
-[2026-03-27 16:26:59] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-03-27 16:26:59] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-03-27 16:26:59] B_OF schema: column 'QTE' used for qty_order
-[2026-03-27 16:26:59] B_OF schema: column for mode_util not present in this version (optional)
-[2026-03-27 16:26:59] SQL generated successfully. 12369 caracteres.
-[2026-03-27 16:27:01] === FK Pre-validation started (checking import data consistency) ===
-[2026-03-27 16:27:01] === FK Pre-validation OK — all cross-references are consistent ===
-[2026-03-27 16:27:02] ERROR (stmt 68): COM Error 0x80020009: [Microsoft][ODBC SQL Server Driver][SQL Server]Cannot insert the value NULL into column 'SERIE', table 'ORTEMS_DEMO.dbo.B_OF'; column does not allow nulls. INSERT fails.
-[2026-03-27 16:27:02]   >> INSERT INTO B_OF (NOF, CODEARTIC, NOMG, VER_ART, QTE, DPLUSTOT, FPLUSTARD, CODEGEST, ETATOF, VER_EFFET_DEBUT, VER_EFFET_
-[2026-03-27 16:27:02] Transaction ROLLED BACK due to error.
-
-========== SESSION STARTED: 2026-03-27 16:32:10 ==========
-[2026-03-27 16:32:17] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-03-27 16:32:17] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-03-27 16:32:17] B_OF schema: column 'QTE' used for qty_order
-[2026-03-27 16:32:17] B_OF schema: column for mode_util not present in this version (optional)
-[2026-03-27 16:32:17] SQL generated successfully. 12405 caracteres.
-[2026-03-27 16:32:19] === FK Pre-validation started (checking import data consistency) ===
-[2026-03-27 16:32:19] === FK Pre-validation OK — all cross-references are consistent ===
-[2026-03-27 16:32:22] Transaction committed successfully.
-[2026-03-27 16:32:22] Execution finished: 61 statements OK, 0 errors.
-
-========== SESSION STARTED: 2026-03-27 16:35:58 ==========
+========== SESSION STARTED: 2026-04-02 16:28:30 ==========
+[2026-04-02 16:30:46] === Load from DB started ===
+[2026-04-02 16:30:46] Calendars loaded: 55 rows
+[2026-04-02 16:30:46] Machines loaded: 12 rows
+[2026-04-02 16:30:46] Operations loaded: 35 rows
+[2026-04-02 16:30:46] Routings loaded: 39 rows
+[2026-04-02 16:30:46] Materials loaded: 39 rows
+[2026-04-02 16:30:46] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-02 16:30:46] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-02 16:30:46] BOM loaded: 96 rows
+[2026-04-02 16:30:46] B_OF schema: column 'QTE' used for qty_order
+[2026-04-02 16:30:46] Work Orders loaded: 34 rows
+[2026-04-02 16:30:46] WO Links loaded: 0 rows
+[2026-04-02 16:30:46] === Load from DB complete — 8 tab(s) populated ===
+[2026-04-02 16:31:16] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-02 16:31:16] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-02 16:31:16] B_OF schema: column 'QTE' used for qty_order
+[2026-04-02 16:31:16] B_OF schema: column for mode_util not present in this version (optional)
+[2026-04-02 16:31:16] SQL generated successfully. 95879 caracteres.
