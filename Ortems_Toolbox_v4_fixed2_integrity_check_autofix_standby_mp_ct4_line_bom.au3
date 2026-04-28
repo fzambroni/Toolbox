@@ -31,7 +31,7 @@ Global Const $BOTTOM_BAR_H = 70
 Global Const $TAB_TOP_Y = 58
 
 ; === CONSTANTES GLOBAIS ===
-Global Const $TITLE       = "Ortems Toolbox v2.0"
+Global Const $TITLE       = "Ortems Toolbox v2.1"
 Global Const $APP_WIDTH   = 1100
 Global Const $APP_HEIGHT  = 720
 Global Const $COL_W       = 140
@@ -81,6 +81,7 @@ Global $g_hLV_Cal, $g_hLV_Mach, $g_hLV_Ops, $g_hLV_Rout
 Global $g_hLV_Mat, $g_hLV_BOM, $g_hLV_WO, $g_hLV_WOL
 Global $g_hLV_SR, $g_hLV_Cap, $g_hLV_Stk
 Global $g_hLog
+Global $g_sIntegrityReport = ""
 ; Tab enable/disable state (Tab control doesn't truly disable items; we block selection via WM_NOTIFY)
 Global $g_aTabEnabled[0]
 Global $g_aTabBaseText[0]
@@ -250,9 +251,15 @@ Func CreateMainWindow()
     GUICtrlSetOnEvent($g_btnSaveSQL, "_SaveSQL")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
-    $g_lblFooter = GUICtrlCreateLabel($TITLE & " | Replaces Toolbox_v2.0.1.xlsm | " & @YEAR, 920, $APP_HEIGHT - 45, 170, 20)
-    GUICtrlSetFont(-1, 7, 400, 0, "Segoe UI")
-    GUICtrlSetColor(-1, 0x999999)
+	Global $g_btnIntegrity = GUICtrlCreateButton("Integrity Check",900, $APP_HEIGHT - 58, 110, 32)
+    GUICtrlSetOnEvent($g_btnIntegrity, "_IntegrityCheck")
+    GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
+    GUICtrlSetBkColor($g_btnIntegrity, 0xFFF2CC)
+    GUICtrlSetTip($g_btnIntegrity, "Validate cross-tab references before generating or running the SQL")
+
+;~     $g_lblFooter = GUICtrlCreateLabel($TITLE & " | Replaces Toolbox_v2.0.1.xlsm | " & @YEAR, 920, $APP_HEIGHT - 45, 170, 20)
+;~     GUICtrlSetFont(-1, 7, 400, 0, "Segoe UI")
+;~     GUICtrlSetColor(-1, 0x999999)
     _InitTabState()
 EndFunc
 
@@ -299,7 +306,7 @@ Func _CreateTabDatabase()
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     $y += 38
 
-    Global $g_btnConnect = GUICtrlCreateButton("  Test Connection", $xV, $y, 160, 30)
+    Global $g_btnConnect = GUICtrlCreateButton("DB Connect", $xV, $y, 160, 30)
     GUICtrlSetOnEvent($g_btnConnect, "_TestConnection")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
 
@@ -437,9 +444,9 @@ Func _CreateTabCalendars()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_Cal_Add", "_Cal_Edit", "_Cal_Del", "_Cal_DelAll")
+    _CreateCRUDButtons($y, "_Cal_Add", "_Cal_Edit", "_Cal_Del", "_Cal_DelAll", "_Cal_ImpCSV", "_Cal_ExpCSV", "_Cal_LoadEx")
 
-    $g_hLV_Cal = GUICtrlCreateListView("Calendar ID|Calendar name|Start day|Start time|End day|End time|", _
+    $g_hLV_Cal = GUICtrlCreateListView("Calendar ID|Calendar name|Start day|Start time|End day|End time|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
@@ -449,8 +456,7 @@ Func _CreateTabCalendars()
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 3, 90)
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 4, 90)
     _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 5, 90)
-
-    _LoadExampleCalendars()
+    _GUICtrlListView_SetColumnWidth($g_hLV_Cal, 6, 55)
 EndFunc
 
 Func _LoadExampleCalendars()
@@ -471,7 +477,7 @@ Func _AddCalendar($sID, $sNome, $iDiaI, $sHoraI, $iDiaF, $sHoraF)
     $g_aCals[$nRows][3] = $sHoraI
     $g_aCals[$nRows][4] = $iDiaF
     $g_aCals[$nRows][5] = $sHoraF
-    GUICtrlCreateListViewItem($sID & "|" & $sNome & "|" & $iDiaI & "|" & $sHoraI & "|" & $iDiaF & "|" & $sHoraF, $g_hLV_Cal)
+    _LV_AppendDataRow($g_hLV_Cal, $sID & "|" & $sNome & "|" & $iDiaI & "|" & $sHoraI & "|" & $iDiaF & "|" & $sHoraF)
 EndFunc
 
 ;=============================================================================
@@ -488,17 +494,16 @@ Func _CreateTabMachines()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_Mach_Add", "_Mach_Edit", "_Mach_Del", "_Mach_DelAll")
+    _CreateCRUDButtons($y, "_Mach_Add", "_Mach_Edit", "_Mach_Del", "_Mach_DelAll", "_Mach_ImpCSV", "_Mach_ExpCSV", "_Mach_LoadEx")
 
-    $g_hLV_Mach = GUICtrlCreateListView("Site ID|Site Name|CT ID|CT Name|CT Type|Section ID|Section Name|Machine ID|Machine Name|Mach Type|Cal ID|Cap Cal ID|", _
+    $g_hLV_Mach = GUICtrlCreateListView("Site ID|Site Name|CT ID|CT Name|CT Type|Section ID|Section Name|Machine ID|Machine Name|Mach Type|Cal ID|Cap Cal ID|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 11
         _GUICtrlListView_SetColumnWidth($g_hLV_Mach, $i, $COL_W - 30)
     Next
-
-    _LoadExampleMachines()
+    _GUICtrlListView_SetColumnWidth($g_hLV_Mach, 12, 55)
 EndFunc
 
 Func _LoadExampleMachines()
@@ -512,7 +517,7 @@ Func _AddMachine($sSiteID, $sSiteNm, $sCTID, $sCTNm, $iCtTp, $sSecID, $sSecNm, $
     Local $n = UBound($g_aMach, 1)
     ReDim $g_aMach[$n + 1][13]
     $g_aMach[$n][0] = $sSiteID ; ...store all fields
-    GUICtrlCreateListViewItem($sSiteID & "|" & $sSiteNm & "|" & $sCTID & "|" & $sCTNm & "|" & $iCtTp & "|" & $sSecID & "|" & $sSecNm & "|" & $sMaqID & "|" & $sMaqNm & "|" & $sMaqTp & "|" & $sCalID & "|" & $sCalCap, $g_hLV_Mach)
+    _LV_AppendDataRow($g_hLV_Mach, $sSiteID & "|" & $sSiteNm & "|" & $sCTID & "|" & $sCTNm & "|" & $iCtTp & "|" & $sSecID & "|" & $sSecNm & "|" & $sMaqID & "|" & $sMaqNm & "|" & $sMaqTp & "|" & $sCalID & "|" & $sCalCap)
 EndFunc
 
 ;=============================================================================
@@ -529,17 +534,16 @@ Func _CreateTabOperations()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_Ops_Add", "_Ops_Edit", "_Ops_Del", "_Ops_DelAll")
+    _CreateCRUDButtons($y, "_Ops_Add", "_Ops_Edit", "_Ops_Del", "_Ops_DelAll", "_Ops_ImpCSV", "_Ops_ExpCSV", "_Ops_LoadEx")
 
-    $g_hLV_Ops = GUICtrlCreateListView("Operation ID|Operation name|WC ID|Machine ID|Ref qty|Ref duration|Unit|Setup|Break|Interrupt|", _
+    $g_hLV_Ops = GUICtrlCreateListView("Operation ID|Operation name|WC ID|Machine ID|Ref qty|Ref duration|Unit|Setup|Break|Interrupt|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 9
         _GUICtrlListView_SetColumnWidth($g_hLV_Ops, $i, $COL_W - 20)
     Next
-
-    _LoadExampleOperations()
+    _GUICtrlListView_SetColumnWidth($g_hLV_Ops, 10, 55)
 EndFunc
 
 Func _LoadExampleOperations()
@@ -552,7 +556,7 @@ EndFunc
 Func _AddOperation($sID, $sNome, $sCT, $sMaq, $nQtdRef, $nDurRef, $sUni, $nPrep, $nTout, $bInterr)
     Local $n = UBound($g_aOps, 1)
     ReDim $g_aOps[$n + 1][11]
-    GUICtrlCreateListViewItem($sID & "|" & $sNome & "|" & $sCT & "|" & $sMaq & "|" & $nQtdRef & "|" & $nDurRef & "|" & $sUni & "|" & $nPrep & "|" & $nTout & "|" & $bInterr, $g_hLV_Ops)
+    _LV_AppendDataRow($g_hLV_Ops, $sID & "|" & $sNome & "|" & $sCT & "|" & $sMaq & "|" & $nQtdRef & "|" & $nDurRef & "|" & $sUni & "|" & $nPrep & "|" & $nTout & "|" & $bInterr)
 EndFunc
 
 ;=============================================================================
@@ -569,9 +573,9 @@ Func _CreateTabRoutings()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_Rout_Add", "_Rout_Edit", "_Rout_Del", "_Rout_DelAll")
+    _CreateCRUDButtons($y, "_Rout_Add", "_Rout_Edit", "_Rout_Del", "_Rout_DelAll", "_Rout_ImpCSV", "_Rout_ExpCSV", "_Rout_LoadEx")
 
-    $g_hLV_Rout = GUICtrlCreateListView("Routing ID|Routing name|Phase code|Operation ID|Phase name|", _
+    $g_hLV_Rout = GUICtrlCreateListView("Routing ID|Routing name|Phase code|Operation ID|Phase name|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
@@ -580,8 +584,7 @@ Func _CreateTabRoutings()
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 2, 110)
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 3, 160)
     _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 4, 250)
-
-    _LoadExampleRoutings()
+    _GUICtrlListView_SetColumnWidth($g_hLV_Rout, 5, 55)
 EndFunc
 
 Func _LoadExampleRoutings()
@@ -596,7 +599,7 @@ EndFunc
 Func _AddRouting($sID, $sNome, $nFase, $sOp, $sNomFase)
     Local $n = UBound($g_aRout, 1)
     ReDim $g_aRout[$n + 1][5]
-    GUICtrlCreateListViewItem($sID & "|" & $sNome & "|" & $nFase & "|" & $sOp & "|" & $sNomFase, $g_hLV_Rout)
+    _LV_AppendDataRow($g_hLV_Rout, $sID & "|" & $sNome & "|" & $nFase & "|" & $sOp & "|" & $sNomFase)
 EndFunc
 
 ;=============================================================================
@@ -613,9 +616,9 @@ Func _CreateTabMaterials()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_Mat_Add", "_Mat_Edit", "_Mat_Del", "_Mat_DelAll")
+    _CreateCRUDButtons($y, "_Mat_Add", "_Mat_Edit", "_Mat_Del", "_Mat_DelAll", "_Mat_ImpCSV", "_Mat_ExpCSV", "_Mat_LoadEx")
 
-    $g_hLV_Mat = GUICtrlCreateListView("Item ID|Item name|Type|Version|Routing ID|On-hand qty|", _
+    $g_hLV_Mat = GUICtrlCreateListView("Item ID|Item name|Type|Version|Routing ID|On-hand qty|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
@@ -625,8 +628,7 @@ Func _CreateTabMaterials()
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 3, 80)
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 4, 150)
     _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 5, 110)
-
-    _LoadExampleMaterials()
+    _GUICtrlListView_SetColumnWidth($g_hLV_Mat, 6, 55)
 EndFunc
 
 Func _LoadExampleMaterials()
@@ -642,7 +644,7 @@ EndFunc
 Func _AddMaterial($sID, $sNome, $sTipo, $sVer, $sRot, $nStk)
     Local $n = UBound($g_aMat, 1)
     ReDim $g_aMat[$n + 1][6]
-    GUICtrlCreateListViewItem($sID & "|" & $sNome & "|" & $sTipo & "|" & $sVer & "|" & $sRot & "|" & $nStk, $g_hLV_Mat)
+    _LV_AppendDataRow($g_hLV_Mat, $sID & "|" & $sNome & "|" & $sTipo & "|" & $sVer & "|" & $sRot & "|" & $nStk)
 EndFunc
 
 ;=============================================================================
@@ -659,17 +661,16 @@ Func _CreateTabBOM()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_BOM_Add", "_BOM_Edit", "_BOM_Del", "_BOM_DelAll")
+    _CreateCRUDButtons($y, "_BOM_Add", "_BOM_Edit", "_BOM_Del", "_BOM_DelAll", "_BOM_ImpCSV", "_BOM_ExpCSV", "_BOM_LoadEx")
 
-    $g_hLV_BOM = GUICtrlCreateListView("Parent item ID|Parent version|Component item ID|Routing ID|Phase|Ref qty|Required qty|", _
+    $g_hLV_BOM = GUICtrlCreateListView("Parent item ID|Parent version|Component item ID|Routing ID|Phase|Ref qty|Required qty|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 6
         _GUICtrlListView_SetColumnWidth($g_hLV_BOM, $i, $COL_W)
     Next
-
-    _LoadExampleBOM()
+    _GUICtrlListView_SetColumnWidth($g_hLV_BOM, 7, 55)
 EndFunc
 
 Func _LoadExampleBOM()
@@ -683,7 +684,7 @@ EndFunc
 Func _AddBOM($sPaiID, $sVPai, $sCompID, $sRotID, $nFase, $nQRef, $nQNec)
     Local $n = UBound($g_aBOM, 1)
     ReDim $g_aBOM[$n + 1][7]
-    GUICtrlCreateListViewItem($sPaiID & "|" & $sVPai & "|" & $sCompID & "|" & $sRotID & "|" & $nFase & "|" & $nQRef & "|" & $nQNec, $g_hLV_BOM)
+    _LV_AppendDataRow($g_hLV_BOM, $sPaiID & "|" & $sVPai & "|" & $sCompID & "|" & $sRotID & "|" & $nFase & "|" & $nQRef & "|" & $nQNec)
 EndFunc
 
 ;=============================================================================
@@ -700,9 +701,9 @@ Func _CreateTabWO()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_WO_Add", "_WO_Edit", "_WO_Del", "_WO_DelAll")
+    _CreateCRUDButtons($y, "_WO_Add", "_WO_Edit", "_WO_Del", "_WO_DelAll", "_WO_ImpCSV", "_WO_ExpCSV", "_WO_LoadEx")
 
-    $g_hLV_WO = GUICtrlCreateListView("WO ID|Item ID|Routing|Version|Qty|Start date|End date|", _
+    $g_hLV_WO = GUICtrlCreateListView("WO ID|Item ID|Routing|Version|Qty|Start date|End date|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
@@ -713,8 +714,7 @@ Func _CreateTabWO()
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 4, 80)
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 5, 140)
     _GUICtrlListView_SetColumnWidth($g_hLV_WO, 6, 140)
-
-    _LoadExampleWOs()
+    _GUICtrlListView_SetColumnWidth($g_hLV_WO, 7, 55)
 EndFunc
 
 Func _LoadExampleWOs()
@@ -726,7 +726,7 @@ EndFunc
 Func _AddWO($sNum, $sMatID, $sRotID, $sVer, $nQtd, $sDtI, $sDtF)
     Local $n = UBound($g_aWO, 1)
     ReDim $g_aWO[$n + 1][7]
-    GUICtrlCreateListViewItem($sNum & "|" & $sMatID & "|" & $sRotID & "|" & $sVer & "|" & $nQtd & "|" & $sDtI & "|" & $sDtF, $g_hLV_WO)
+    _LV_AppendDataRow($g_hLV_WO, $sNum & "|" & $sMatID & "|" & $sRotID & "|" & $sVer & "|" & $nQtd & "|" & $sDtI & "|" & $sDtF)
 EndFunc
 
 ;=============================================================================
@@ -743,15 +743,16 @@ Func _CreateTabWOLinks()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_WOL_Add", "_WOL_Edit", "_WOL_Del", "_WOL_DelAll")
+    _CreateCRUDButtons($y, "_WOL_Add", "_WOL_Edit", "_WOL_Del", "_WOL_DelAll", "_WOL_ImpCSV", "_WOL_ExpCSV", "_WOL_LoadEx")
 
-    $g_hLV_WOL = GUICtrlCreateListView("Predecessor WO|Pred routing|Pred phase|Successor WO|Succ routing|Succ phase|Link type|", _
+    $g_hLV_WOL = GUICtrlCreateListView("Predecessor WO|Pred routing|Pred phase|Successor WO|Succ routing|Succ phase|Link type|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 6
         _GUICtrlListView_SetColumnWidth($g_hLV_WOL, $i, $COL_W)
     Next
+    _GUICtrlListView_SetColumnWidth($g_hLV_WOL, 7, 55)
 EndFunc
 
 ;=============================================================================
@@ -768,15 +769,16 @@ Func _CreateTabSecResources()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_SR_Add", "_SR_Edit", "_SR_Del", "_SR_DelAll")
+    _CreateCRUDButtons($y, "_SR_Add", "_SR_Edit", "_SR_Del", "_SR_DelAll", "_SR_ImpCSV", "_SR_ExpCSV", "_SR_LoadEx")
 
-    $g_hLV_SR = GUICtrlCreateListView("Operation ID|WC ID|Machine ID|Qualification ID|Capacity calendar ID|", _
+    $g_hLV_SR = GUICtrlCreateListView("Operation ID|WC ID|Machine ID|Qualification ID|Capacity calendar ID|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 4
         _GUICtrlListView_SetColumnWidth($g_hLV_SR, $i, $COL_W + 20)
     Next
+    _GUICtrlListView_SetColumnWidth($g_hLV_SR, 5, 55)
 EndFunc
 
 ;=============================================================================
@@ -793,15 +795,16 @@ Func _CreateTabCapacity()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_Cap_Add", "_Cap_Edit", "_Cap_Del", "_Cap_DelAll")
+    _CreateCRUDButtons($y, "_Cap_Add", "_Cap_Edit", "_Cap_Del", "_Cap_DelAll", "_Cap_ImpCSV", "_Cap_ExpCSV", "_Cap_LoadEx")
 
-    $g_hLV_Cap = GUICtrlCreateListView("Cap cal ID|Start day|Start time|End day|End time|#Resources|", _
+    $g_hLV_Cap = GUICtrlCreateListView("Cap cal ID|Start day|Start time|End day|End time|#Resources|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 5
         _GUICtrlListView_SetColumnWidth($g_hLV_Cap, $i, $COL_W + 10)
     Next
+    _GUICtrlListView_SetColumnWidth($g_hLV_Cap, 6, 55)
 EndFunc
 
 ;=============================================================================
@@ -818,15 +821,16 @@ Func _CreateTabStockMov()
     GUICtrlSetColor(-1, 0x555555)
 
     Local $y = 145
-    _CreateCRUDButtons($y, "_Stk_Add", "_Stk_Edit", "_Stk_Del", "_Stk_DelAll")
+    _CreateCRUDButtons($y, "_Stk_Add", "_Stk_Edit", "_Stk_Del", "_Stk_DelAll", "_Stk_ImpCSV", "_Stk_ExpCSV", "_Stk_LoadEx")
 
-    $g_hLV_Stk = GUICtrlCreateListView("Item ID|Routing ID|Version|Move date|Quantity|", _
+    $g_hLV_Stk = GUICtrlCreateListView("Item ID|Routing ID|Version|Move date|Quantity|Line|", _
         $xL, $y + 35, $APP_WIDTH - 40, 400, _
         BitOR($LVS_REPORT, $LVS_SHOWSELALWAYS, $WS_BORDER))
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     For $i = 0 To 4
         _GUICtrlListView_SetColumnWidth($g_hLV_Stk, $i, $COL_W + 30)
     Next
+    _GUICtrlListView_SetColumnWidth($g_hLV_Stk, 5, 55)
 EndFunc
 
 ;=============================================================================
@@ -848,6 +852,8 @@ Func _CreateTabSQL()
     Global $g_chkTransaction = GUICtrlCreateCheckbox("Wrap in a transaction (auto ROLLBACK on error)", $xL + 15, $y + 40, 390, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetState($g_chkTransaction, $GUI_CHECKED)
+
+
 
     ; SQL editor
     $y = 206
@@ -876,270 +882,771 @@ EndFunc
 ;=============================================================================
 ; HELPER: BOTOES CRUD PADRAO
 ;=============================================================================
-Func _CreateCRUDButtons($y, $sAdd, $sEdit, $sDel, $sDelAll)
+Func _CreateCRUDButtons($y, $sAdd, $sEdit, $sDel, $sDelAll, $sImp = "", $sExp = "", $sLoadEx = "")
     Local $btnAdd = GUICtrlCreateButton("+ Add", 20, $y - 2, 110, 28)
     GUICtrlSetOnEvent($btnAdd, $sAdd)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    GUICtrlSetTip($btnAdd, "Add a new row to this tab")
 
     Local $btnEdit = GUICtrlCreateButton("Edit", 140, $y - 2, 90, 28)
     GUICtrlSetOnEvent($btnEdit, $sEdit)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    GUICtrlSetTip($btnEdit, "Edit the currently selected row")
 
     Local $btnDel = GUICtrlCreateButton("- Remove", 240, $y - 2, 100, 28)
     GUICtrlSetOnEvent($btnDel, $sDel)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    GUICtrlSetTip($btnDel, "Remove the currently selected row")
 
     Local $btnDelAll = GUICtrlCreateButton("Clear All", 350, $y - 2, 105, 28)
     GUICtrlSetOnEvent($btnDelAll, $sDelAll)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    GUICtrlSetTip($btnDelAll, "Remove ALL rows in this tab")
 
-    Local $btnImp = GUICtrlCreateButton("Import CSV...", 465, $y - 2, 120, 28)
+    ; Load Example — highlighted so users see it as the easy way to populate a tab
+    If $sLoadEx <> "" Then
+        Local $btnLoadEx = GUICtrlCreateButton("Load Example", 465, $y - 2, 140, 28)
+        GUICtrlSetOnEvent($btnLoadEx, $sLoadEx)
+        GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
+        GUICtrlSetBkColor($btnLoadEx, 0xE8F4FD)
+        GUICtrlSetTip($btnLoadEx, "Fill this tab with sample demo data (appends to any existing rows)")
+    EndIf
+
+    Local $btnImp = GUICtrlCreateButton("Import CSV...", 615, $y - 2, 120, 28)
+    If $sImp <> "" Then GUICtrlSetOnEvent($btnImp, $sImp)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
-    Local $btnExp = GUICtrlCreateButton("Export CSV...", 595, $y - 2, 120, 28)
+    Local $btnExp = GUICtrlCreateButton("Export CSV...", 745, $y - 2, 120, 28)
+    If $sExp <> "" Then GUICtrlSetOnEvent($btnExp, $sExp)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 EndFunc
 
 ;=============================================================================
 ; DIALOGO GENERICO PARA ADICIONAR/EDITAR LINHA
+;   $aFields  = array of field labels
+;   $aValues  = array of current values (for edit) OR 0 for empty
+;   $aHints   = OPTIONAL array of hint strings shown under each input
+;   $sSubtitle= OPTIONAL extra text under the dialog title (e.g. "Row 3 of 5")
+;
+; IMPORTANT — the main GUI runs in OnEvent mode, but this popup is handled as a
+; local modal dialog with GUIGetMsg. That avoids the deadlock/freeze seen when
+; Save/Cancel tried to signal back through a busy wait loop.
 ;=============================================================================
-Func _ShowRowDialog($sTitle, $aFields, $aValues)
-    ; $aFields = array de nomes de campos
-    ; $aValues = array de valores atuais (para edicao)
+Func _ShowRowDialog($sTitle, $aFields, $aValues, $aHints = "", $sSubtitle = "")
     Local $nF = UBound($aFields)
-    Local $hDlg = GUICreate($sTitle, 480, 80 + $nF * 36 + 50, -1, -1, _
-        BitOR($WS_DLGFRAME, $WS_POPUP, $WS_CAPTION))
+    Local $bHasHints = (IsArray($aHints) And UBound($aHints) >= $nF)
+
+    Local $iRowH = $bHasHints ? 50 : 34
+    Local $iDlgW = 640
+    Local $iHeaderH = ($sSubtitle = "" ? 62 : 80)
+    Local $iDlgH = $iHeaderH + 10 + $nF * $iRowH + 70
+
+    Local $iPrevOnEvent = Opt("GUIOnEventMode", 0)
+    Local $hDlg = GUICreate($sTitle, $iDlgW, $iDlgH, -1, -1, _
+        BitOR($WS_DLGFRAME, $WS_POPUP, $WS_CAPTION), -1, $g_hMain)
+    GUISetBkColor(0xF7F7F7, $hDlg)
+
+    ; ---- Header ----
+    GUICtrlCreateLabel($sTitle, 15, 10, $iDlgW - 30, 22)
+    GUICtrlSetFont(-1, 12, 700, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x003366)
+
+    Local $sHeaderLine2 = "Review each field below. Labels in bold are the column being edited."
+    If $sSubtitle <> "" Then $sHeaderLine2 = $sSubtitle & "  —  " & $sHeaderLine2
+    GUICtrlCreateLabel($sHeaderLine2, 15, 34, $iDlgW - 30, 18)
+    GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+    GUICtrlSetColor(-1, 0x555555)
+
+    GUICtrlCreateLabel("", 10, $iHeaderH - 4, $iDlgW - 20, 1)
+    GUICtrlSetBkColor(-1, 0xCCCCCC)
+
+    Local $iLabelX = 15, $iNumW = 22, $iLabelW = 205
+    Local $iInputX = 245, $iInputW = $iDlgW - $iInputX - 20
+    Local $y = $iHeaderH + 6
 
     Local $aInputs[$nF]
-    Local $y = 20
     For $i = 0 To $nF - 1
-        GUICtrlCreateLabel($aFields[$i] & ":", 20, $y + 3, 170, 20)
-        GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-        $aInputs[$i] = GUICtrlCreateInput(IsArray($aValues) ? $aValues[$i] : "", 200, $y, 250, 24)
-        GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-        $y += 36
+        If Mod($i, 2) = 1 Then
+            Local $hBg = GUICtrlCreateLabel("", 10, $y - 3, $iDlgW - 20, $iRowH)
+            GUICtrlSetBkColor($hBg, 0xECECEC)
+            GUICtrlSetState($hBg, $GUI_DISABLE)
+        EndIf
+
+        GUICtrlCreateLabel(($i + 1) & ".", $iLabelX, $y + 4, $iNumW, 18)
+        GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
+        GUICtrlSetColor(-1, 0x888888)
+        GUICtrlSetBkColor(-1, -2)
+
+        GUICtrlCreateLabel($aFields[$i] & ":", $iLabelX + $iNumW, $y + 4, $iLabelW, 18)
+        GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
+        GUICtrlSetColor(-1, 0x222222)
+        GUICtrlSetBkColor(-1, -2)
+
+        Local $sVal = ""
+        If IsArray($aValues) And $i < UBound($aValues) Then $sVal = $aValues[$i]
+        $aInputs[$i] = GUICtrlCreateInput($sVal, $iInputX, $y + 2, $iInputW, 22)
+        GUICtrlSetFont(-1, 10, 400, 0, "Segoe UI")
+        GUICtrlSetBkColor(-1, 0xFFFFFF)
+
+        If $bHasHints And $aHints[$i] <> "" Then
+            GUICtrlCreateLabel($aHints[$i], $iInputX, $y + 26, $iInputW, 18)
+            GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
+            GUICtrlSetColor(-1, 0x0066AA)
+            GUICtrlSetBkColor(-1, -2)
+            GUICtrlSetTip($aInputs[$i], $aHints[$i])
+        EndIf
+
+        $y += $iRowH
     Next
 
-    Local $btnOK = GUICtrlCreateButton("OK", 200, $y + 10, 100, 30)
-    GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
-    Local $btnCancel = GUICtrlCreateButton("Cancel", 310, $y + 10, 100, 30)
-    GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    $y += 6
+    GUICtrlCreateLabel("", 10, $y, $iDlgW - 20, 1)
+    GUICtrlSetBkColor(-1, 0xCCCCCC)
+    $y += 10
 
+    Local $btnOK = GUICtrlCreateButton("Save", $iDlgW - 230, $y, 100, 32)
+    GUICtrlSetFont(-1, 10, 700, 0, "Segoe UI")
+    GUICtrlSetBkColor($btnOK, 0xDDFFDD)
+
+    Local $btnCancel = GUICtrlCreateButton("Cancel", $iDlgW - 120, $y, 100, 32)
+    GUICtrlSetFont(-1, 10, 400, 0, "Segoe UI")
+
+    If $g_hMain <> 0 Then GUISetState(@SW_DISABLE, $g_hMain)
     GUISetState(@SW_SHOW, $hDlg)
+    If $nF > 0 Then ControlFocus($hDlg, "", $aInputs[0])
 
     Local $aResult[$nF]
     Local $bOK = False
-
     While 1
         Local $nMsg = GUIGetMsg()
-        If $nMsg = $GUI_EVENT_CLOSE Or $nMsg = $btnCancel Then
-            ExitLoop
-        ElseIf $nMsg = $btnOK Then
-            For $i = 0 To $nF - 1
-                $aResult[$i] = GUICtrlRead($aInputs[$i])
-            Next
-            $bOK = True
-            ExitLoop
-        EndIf
+        Switch $nMsg
+            Case $GUI_EVENT_CLOSE, $btnCancel
+                ExitLoop
+            Case $btnOK
+                $bOK = True
+                For $i = 0 To $nF - 1
+                    $aResult[$i] = GUICtrlRead($aInputs[$i])
+                Next
+                ExitLoop
+        EndSwitch
+        Sleep(15)
     WEnd
 
+    If $g_hMain <> 0 Then GUISetState(@SW_ENABLE, $g_hMain)
     GUIDelete($hDlg)
+    If $g_hMain <> 0 Then WinActivate($g_hMain)
+    Opt("GUIOnEventMode", $iPrevOnEvent)
+
     If $bOK Then Return $aResult
     Return 0
 EndFunc
 
 ;=============================================================================
+; LISTVIEW HELPER — visible line number column (last column)
+;=============================================================================
+Func _LV_AppendDataRow($hLV, $sData)
+    GUICtrlCreateListViewItem($sData & "|" & (_GUICtrlListView_GetItemCount($hLV) + 1), $hLV)
+EndFunc
+
+Func _LV_Renumber($hLV)
+    If $hLV = 0 Then Return
+    Local $nCols = _GUICtrlListView_GetColumnCount($hLV)
+    If $nCols < 1 Then Return
+    Local $iLineCol = $nCols - 1
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        _GUICtrlListView_SetItemText($hLV, $i, $i + 1, $iLineCol)
+    Next
+EndFunc
+
+;=============================================================================
+; GENERIC EDIT HELPER — reads the selected row of a ListView, opens the edit
+; dialog pre-filled with current values, and writes the result back in place.
+; Returns True on save, False on cancel / no selection.
+;=============================================================================
+Func _LV_EditSelectedRow($hLV, $sTitle, $aFields, $aHints = "")
+    Local $iSel = _GUICtrlListView_GetSelectionMark($hLV)
+    If $iSel < 0 Then
+        Local $sSel = _GUICtrlListView_GetSelectedIndices($hLV)
+        If $sSel <> "" Then $iSel = Number($sSel)
+    EndIf
+    If $iSel < 0 Then
+        MsgBox(48, "No row selected", "Please click on a row in the list first, then press Edit.")
+        Return False
+    EndIf
+
+    Local $nCols  = _GUICtrlListView_GetColumnCount($hLV)
+    Local $nDataCols = $nCols - 1
+    Local $nTotal = _GUICtrlListView_GetItemCount($hLV)
+    Local $aValues[$nDataCols]
+    For $c = 0 To $nDataCols - 1
+        $aValues[$c] = _GUICtrlListView_GetItemText($hLV, $iSel, $c)
+    Next
+
+    Local $sSubtitle = "Editing row " & ($iSel + 1) & " of " & $nTotal
+    Local $aResult = _ShowRowDialog($sTitle, $aFields, $aValues, $aHints, $sSubtitle)
+    If Not IsArray($aResult) Then Return False
+
+    ; Write new values back into the same row (preserves position and selection)
+    For $c = 0 To $nDataCols - 1
+        If $c < UBound($aResult) Then
+            _GUICtrlListView_SetItemText($hLV, $iSel, $aResult[$c], $c)
+        EndIf
+    Next
+    Return True
+EndFunc
+
+;=============================================================================
 ; HANDLERS DE EVENTOS - CRUD CALENDARIOS
 ;=============================================================================
-Func _Cal_Add()
-    Local $aFields[] = ["Calendar ID (no spaces)", "Calendar name", "Start day (1=Mon..7=Sun)", "Start time (HH:MM)", "End day (1=Mon..7=Sun)", "End time (HH:MM)"]
-    Local $aVals[] = ["Cal_1x8", "Cal 1x8", "1", "08:00", "1", "17:00"]
-    Local $aResult = _ShowRowDialog("Add calendar", $aFields, $aVals)
-    If IsArray($aResult) Then
-        _AddCalendar($aResult[0], $aResult[1], $aResult[2], $aResult[3], $aResult[4], $aResult[5])
-    EndIf
+Func _Cal_Fields()
+    Local $a[] = ["Calendar ID", "Calendar name", "Start day", "Start time", "End day", "End time"]
+    Return $a
 EndFunc
-;~ Func _Cal_Edit() EndFunc
+Func _Cal_Hints()
+    Local $a[] = [ _
+        "Unique code, no spaces. Example: Cal_1x8", _
+        "Human-friendly label. Example: Cal 1x8", _
+        "Day of week where the shift starts: 1=Mon ... 7=Sun", _
+        "Shift start time in HH:MM (24h). Example: 08:00", _
+        "Day of week where the shift ends (same as start for intra-day shifts)", _
+        "Shift end time in HH:MM (24h). Example: 17:00"]
+    Return $a
+EndFunc
+Func _Cal_Add()
+    Local $aFields = _Cal_Fields()
+    Local $aHints  = _Cal_Hints()
+    Local $aVals[] = ["Cal_1x8", "Cal 1x8", "1", "08:00", "1", "17:00"]
+    Local $aResult = _ShowRowDialog("Add calendar", $aFields, $aVals, $aHints)
+    If IsArray($aResult) Then _AddCalendar($aResult[0], $aResult[1], $aResult[2], $aResult[3], $aResult[4], $aResult[5])
+EndFunc
+Func _Cal_Edit()
+    _LV_EditSelectedRow($g_hLV_Cal, "Edit calendar", _Cal_Fields(), _Cal_Hints())
+EndFunc
 Func _Cal_Del()
-    Local $iSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Cal)
-    If $iSel <> "" Then GUICtrlDelete(_GUICtrlListView_GetItemText($g_hLV_Cal, $iSel))
-    _GUICtrlListView_DeleteItem($g_hLV_Cal, $iSel)
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Cal)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_Cal, Number($sSel))
+    _LV_Renumber($g_hLV_Cal)
 EndFunc
 Func _Cal_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_Cal)
+    _GUICtrlListView_DeleteAllItems($g_hLV_Cal)
+    _LV_Renumber($g_hLV_Cal)
+EndFunc
+Func _Cal_LoadEx()
+    _LoadExampleCalendars()
 EndFunc
 
 ;=============================================================================
 ; HANDLERS - MAQUINAS
 ;=============================================================================
+Func _Mach_Fields()
+    Local $a[] = ["Site ID", "Site name", "CT ID", "CT name", "CT type", "Section ID", "Section name", "Machine ID", "Machine name", "Machine type", "Calendar ID", "Capacity calendar ID"]
+    Return $a
+EndFunc
+Func _Mach_Hints()
+    Local $a[] = [ _
+        "Plant / site code. Example: LYON", _
+        "Plant / site label", _
+        "Work center (grouping) code, no spaces. Example: Milling", _
+        "Work center human label", _
+        "Capacity: 2 = Finite (bottleneck), 4 = Infinite", _
+        "Section code (organisational sub-unit)", _
+        "Section label", _
+        "Machine unique code, no spaces. Example: Milling_1", _
+        "Machine human label", _
+        "NR=Standard, BA=Batch, RN=Run, CU=Tank", _
+        "Work-hours calendar (must exist in the Calendars tab)", _
+        "Capacity calendar for load calculation (often same as Calendar ID)"]
+    Return $a
+EndFunc
 Func _Mach_Add()
-    Local $aFields[] = ["Site ID", "Site Nome", "CT ID (sem espacos)", "CT Nome", "Tipo CT (2=Finito/4=Infinito)", "Secao ID", "Secao Nome", "Machine ID", "Machine name", "Machine type (NR/BA/RN/CU)", "Cal. Abertura ID", "Capacity calendar ID"]
+    Local $aFields = _Mach_Fields()
+    Local $aHints  = _Mach_Hints()
     Local $aVals[] = ["LYON","LYON","Milling","Fresagem","2","Sec_A","Secao A","Milling_1","Fresagem 1","NR","Cal_1x8","Cal_1x8"]
-    Local $aResult = _ShowRowDialog("Add machine", $aFields, $aVals)
+    Local $aResult = _ShowRowDialog("Add machine", $aFields, $aVals, $aHints)
     If IsArray($aResult) Then
         _AddMachine($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5],$aResult[6],$aResult[7],$aResult[8],$aResult[9],$aResult[10],$aResult[11])
     EndIf
 EndFunc
 Func _Mach_Edit()
+    _LV_EditSelectedRow($g_hLV_Mach, "Edit machine", _Mach_Fields(), _Mach_Hints())
 EndFunc
 Func _Mach_Del()
-	_GUICtrlListView_DeleteItem($g_hLV_Mach, _GUICtrlListView_GetSelectedIndices($g_hLV_Mach))
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Mach)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_Mach, Number($sSel))
+    _LV_Renumber($g_hLV_Mach)
 EndFunc
 Func _Mach_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_Mach)
+    _GUICtrlListView_DeleteAllItems($g_hLV_Mach)
+    _LV_Renumber($g_hLV_Mach)
+EndFunc
+Func _Mach_LoadEx()
+    _LoadExampleMachines()
 EndFunc
 
 ;=============================================================================
 ; HANDLERS - OPERACOES
 ;=============================================================================
+Func _Ops_Fields()
+    Local $a[] = ["Operation ID","Operation name","WC / CT ID","Machine ID","Ref qty","Ref duration","Unit","Setup time","Break time","Interruptible"]
+    Return $a
+EndFunc
+Func _Ops_Hints()
+    Local $a[] = [ _
+        "Unique operation code. Example: MILL", _
+        "Human label. Example: Fresagem Eixos", _
+        "Work center / grouping code where this op runs (must exist in Machines tab)", _
+        "Machine that executes this op (must exist in Machines tab)", _
+        "Reference quantity the duration is measured for (integer)", _
+        "Reference duration (in Unit below) to produce Ref qty", _
+        "D=Days, H=Hours, C=Hundredths of an hour", _
+        "Setup time before the op starts (hours)", _
+        "Break / teardown time after op ends (hours)", _
+        "1 = op can be interrupted and resumed, 0 = must run continuously"]
+    Return $a
+EndFunc
 Func _Ops_Add()
-    Local $aFields[] = ["Operation ID","Operation name","CT ID","Machine ID","Qtd Referencia","Dur Referencia","Unidade (J/H/C)","Prep (HH)","Time Out (HH)","Interruptible (1/0)"]
-    Local $aResult = _ShowRowDialog("Add operation", $aFields, 0)
+    Local $aFields = _Ops_Fields()
+    Local $aHints  = _Ops_Hints()
+    Local $aVals[] = ["MILL","Fresagem","Milling","Milling_1","26","1","H","0","0","1"]
+    Local $aResult = _ShowRowDialog("Add operation", $aFields, $aVals, $aHints)
     If IsArray($aResult) Then _AddOperation($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5],$aResult[6],$aResult[7],$aResult[8],$aResult[9])
 EndFunc
 Func _Ops_Edit()
+    _LV_EditSelectedRow($g_hLV_Ops, "Edit operation", _Ops_Fields(), _Ops_Hints())
 EndFunc
 Func _Ops_Del()
-	_GUICtrlListView_DeleteItem($g_hLV_Ops, _GUICtrlListView_GetSelectedIndices($g_hLV_Ops))
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Ops)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_Ops, Number($sSel))
+    _LV_Renumber($g_hLV_Ops)
 EndFunc
 Func _Ops_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_Ops)
+    _GUICtrlListView_DeleteAllItems($g_hLV_Ops)
+    _LV_Renumber($g_hLV_Ops)
+EndFunc
+Func _Ops_LoadEx()
+    _LoadExampleOperations()
 EndFunc
 
 ;=============================================================================
 ; HANDLERS - ROTEIROS
 ;=============================================================================
+Func _Rout_Fields()
+    Local $a[] = ["Routing ID","Routing name","Phase code","Operation ID","Phase name"]
+    Return $a
+EndFunc
+Func _Rout_Hints()
+    Local $a[] = [ _
+        "Unique routing code, no spaces. Example: STD_AX", _
+        "Human label. Example: Eixos Standard", _
+        "Phase sequence number (10, 20, 30, ...). Lower = earlier in the routing", _
+        "Operation to run at this phase (must exist in Operations tab)", _
+        "Free-text label for this specific phase"]
+    Return $a
+EndFunc
 Func _Rout_Add()
-    Local $aFields[] = ["Routing ID","Routing name","Codigo Fase (10,20,...)","Operation ID","Nome Fase"]
-    Local $aResult = _ShowRowDialog("Add routing", $aFields, 0)
+    Local $aFields = _Rout_Fields()
+    Local $aHints  = _Rout_Hints()
+    Local $aVals[] = ["STD_AX","Eixos Standard","10","MILL","Fresagem Eixos Standard"]
+    Local $aResult = _ShowRowDialog("Add routing", $aFields, $aVals, $aHints)
     If IsArray($aResult) Then _AddRouting($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4])
 EndFunc
 Func _Rout_Edit()
+    _LV_EditSelectedRow($g_hLV_Rout, "Edit routing", _Rout_Fields(), _Rout_Hints())
 EndFunc
 Func _Rout_Del()
-	_GUICtrlListView_DeleteItem($g_hLV_Rout, _GUICtrlListView_GetSelectedIndices($g_hLV_Rout))
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Rout)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_Rout, Number($sSel))
+    _LV_Renumber($g_hLV_Rout)
 EndFunc
 Func _Rout_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_Rout)
+    _GUICtrlListView_DeleteAllItems($g_hLV_Rout)
+    _LV_Renumber($g_hLV_Rout)
+EndFunc
+Func _Rout_LoadEx()
+    _LoadExampleRoutings()
 EndFunc
 
 ;=============================================================================
 ; HANDLERS - MATERIAIS
 ;=============================================================================
+Func _Mat_Fields()
+    Local $a[] = ["Item ID","Item name","Type","Version","Routing ID","On-hand qty"]
+    Return $a
+EndFunc
+Func _Mat_Hints()
+    Local $a[] = [ _
+        "Unique item code, no spaces. Example: STD_Caixa", _
+        "Human label. Example: Caixa Standard", _
+        "MP = Raw material, SF = Semi-finished, PF = Finished good", _
+        "Version code (00 = standard, STD, SPT, ...). Drives BOM/routing selection", _
+        "Routing used to produce this item (leave blank for raw materials)", _
+        "Current stock on hand (numeric). Starting inventory for this version"]
+    Return $a
+EndFunc
 Func _Mat_Add()
-    Local $aFields[] = ["Item ID","Item name","Tipo (MP/SF/PF)","Versao","Routing ID","On-hand qty"]
-    Local $aResult = _ShowRowDialog("Add item", $aFields, 0)
+    Local $aFields = _Mat_Fields()
+    Local $aHints  = _Mat_Hints()
+    Local $aVals[] = ["STD_Caixa","Caixa Standard","PF","STD","STD_GB","0"]
+    Local $aResult = _ShowRowDialog("Add item", $aFields, $aVals, $aHints)
     If IsArray($aResult) Then _AddMaterial($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5])
 EndFunc
 Func _Mat_Edit()
+    _LV_EditSelectedRow($g_hLV_Mat, "Edit item", _Mat_Fields(), _Mat_Hints())
 EndFunc
 Func _Mat_Del()
-	_GUICtrlListView_DeleteItem($g_hLV_Mat, _GUICtrlListView_GetSelectedIndices($g_hLV_Mat))
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Mat)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_Mat, Number($sSel))
+    _LV_Renumber($g_hLV_Mat)
 EndFunc
 Func _Mat_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_Mat)
+    _GUICtrlListView_DeleteAllItems($g_hLV_Mat)
+    _LV_Renumber($g_hLV_Mat)
+EndFunc
+Func _Mat_LoadEx()
+    _LoadExampleMaterials()
 EndFunc
 
 ;=============================================================================
 ; HANDLERS - BOM
 ;=============================================================================
+Func _BOM_Fields()
+    Local $a[] = ["Parent item ID","Parent version","Component item ID","Routing ID","Phase","Ref qty","Required qty"]
+    Return $a
+EndFunc
+Func _BOM_Hints()
+    Local $a[] = [ _
+        "Item that will be produced (parent). Must exist in Items tab", _
+        "Version of the parent (must match a version in Items tab)", _
+        "Component to consume (must exist in Items tab)", _
+        "Routing of the parent (consumption happens within this routing)", _
+        "Phase number where the component is consumed (e.g. 10)", _
+        "Reference batch size (typically 1)", _
+        "Qty of component needed to produce 'Ref qty' of parent"]
+    Return $a
+EndFunc
 Func _BOM_Add()
-    Local $aFields[] = ["Parent item ID","Versao Pai","Component item ID","Routing ID","Codigo Fase","Qtd Referencia","Qtd Necessaria"]
-    Local $aResult = _ShowRowDialog("Add BOM row", $aFields, 0)
+    Local $aFields = _BOM_Fields()
+    Local $aHints  = _BOM_Hints()
+    Local $aVals[] = ["STD_Caixa","STD","R_Eixos","STD_GB","10","1","2"]
+    Local $aResult = _ShowRowDialog("Add BOM row", $aFields, $aVals, $aHints)
     If IsArray($aResult) Then _AddBOM($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5],$aResult[6])
 EndFunc
 Func _BOM_Edit()
+    _LV_EditSelectedRow($g_hLV_BOM, "Edit BOM row", _BOM_Fields(), _BOM_Hints())
 EndFunc
 Func _BOM_Del()
-	_GUICtrlListView_DeleteItem($g_hLV_BOM, _GUICtrlListView_GetSelectedIndices($g_hLV_BOM))
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_BOM)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_BOM, Number($sSel))
+    _LV_Renumber($g_hLV_BOM)
 EndFunc
 Func _BOM_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_BOM)
+    _GUICtrlListView_DeleteAllItems($g_hLV_BOM)
+    _LV_Renumber($g_hLV_BOM)
+EndFunc
+Func _BOM_LoadEx()
+    _LoadExampleBOM()
 EndFunc
 
 ;=============================================================================
 ; HANDLERS - WO
 ;=============================================================================
+Func _WO_Fields()
+    Local $a[] = ["WO number","Item ID","Routing ID","Version","Quantity","Start date","End date"]
+    Return $a
+EndFunc
+Func _WO_Hints()
+    Local $a[] = [ _
+        "Unique work-order number. Example: WO001", _
+        "Item to produce (must exist in Items tab)", _
+        "Routing used for this WO (must exist in Routings tab)", _
+        "Version of the item (STD, SPT, 00, ...)", _
+        "Quantity to produce (numeric)", _
+        "Start date in dd/mm/yyyy hh:mm. Example: 01/02/2025 00:00", _
+        "End / due date in dd/mm/yyyy hh:mm. Example: 28/02/2025 23:59"]
+    Return $a
+EndFunc
 Func _WO_Add()
-    Local $aFields[] = ["Numero OP","Item ID","Routing ID","Versao","Quantidade","Data Inicio (dd/mm/aaaa hh:mm)","Data Fim (dd/mm/aaaa hh:mm)"]
-    Local $aResult = _ShowRowDialog("Add work order", $aFields, 0)
+    Local $aFields = _WO_Fields()
+    Local $aHints  = _WO_Hints()
+    Local $aVals[] = ["WO001","STD_Caixa","STD_GB","STD","10","01/02/2025 00:00","28/02/2025 23:59"]
+    Local $aResult = _ShowRowDialog("Add work order", $aFields, $aVals, $aHints)
     If IsArray($aResult) Then _AddWO($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5],$aResult[6])
 EndFunc
 Func _WO_Edit()
+    _LV_EditSelectedRow($g_hLV_WO, "Edit work order", _WO_Fields(), _WO_Hints())
 EndFunc
 Func _WO_Del()
-	_GUICtrlListView_DeleteItem($g_hLV_WO, _GUICtrlListView_GetSelectedIndices($g_hLV_WO))
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_WO)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_WO, Number($sSel))
+    _LV_Renumber($g_hLV_WO)
 EndFunc
 Func _WO_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_WO)
+    _GUICtrlListView_DeleteAllItems($g_hLV_WO)
+    _LV_Renumber($g_hLV_WO)
+EndFunc
+Func _WO_LoadEx()
+    _LoadExampleWOs()
 EndFunc
 
 ;=============================================================================
 ; HANDLERS - WO LINKS
 ;=============================================================================
+Func _WOL_Fields()
+    Local $a[] = ["Predecessor WO","Pred routing","Pred phase","Successor WO","Succ routing","Succ phase","Link type"]
+    Return $a
+EndFunc
+Func _WOL_Hints()
+    Local $a[] = [ _
+        "The WO that must complete first (must exist in Work Orders tab)", _
+        "Routing of the predecessor WO", _
+        "Phase number in the predecessor routing (e.g. 10)", _
+        "The WO that depends on the predecessor", _
+        "Routing of the successor WO", _
+        "Phase number in the successor routing", _
+        "FS=Finish-Start, SS=Start-Start, FF=Finish-Finish, SF=Start-Finish"]
+    Return $a
+EndFunc
 Func _WOL_Add()
-    Local $aFields[] = ["OP Predecessor","Pred routing","Fase Pred","OP Sucessor","Succ routing","Fase Suc","Link type (FS/SS/FF)"]
-    Local $aResult = _ShowRowDialog("Add WO link", $aFields, 0)
-    If IsArray($aResult) Then GUICtrlCreateListViewItem($aResult[0] & "|" & $aResult[1] & "|" & $aResult[2] & "|" & $aResult[3] & "|" & $aResult[4] & "|" & $aResult[5] & "|" & $aResult[6], $g_hLV_WOL)
+    Local $aFields = _WOL_Fields()
+    Local $aHints  = _WOL_Hints()
+    Local $aVals[] = ["WO001","STD_GB","10","WO002","STD_GB","10","FS"]
+    Local $aResult = _ShowRowDialog("Add WO link", $aFields, $aVals, $aHints)
+    If IsArray($aResult) Then _AddWOLink($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5],$aResult[6])
 EndFunc
 Func _WOL_Edit()
+    _LV_EditSelectedRow($g_hLV_WOL, "Edit WO link", _WOL_Fields(), _WOL_Hints())
 EndFunc
 Func _WOL_Del()
-	_GUICtrlListView_DeleteItem($g_hLV_WOL, _GUICtrlListView_GetSelectedIndices($g_hLV_WOL))
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_WOL)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_WOL, Number($sSel))
+    _LV_Renumber($g_hLV_WOL)
 EndFunc
 Func _WOL_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_WOL)
+    _GUICtrlListView_DeleteAllItems($g_hLV_WOL)
+    _LV_Renumber($g_hLV_WOL)
+EndFunc
+Func _WOL_LoadEx()
+    _LoadExampleWOLinks()
 EndFunc
 
 ;=============================================================================
 ; HANDLERS - RECURSOS SECUNDARIOS
 ;=============================================================================
+Func _SR_Fields()
+    Local $a[] = ["Operation ID","WC / CT ID","Machine ID","Qualification ID","Capacity calendar ID"]
+    Return $a
+EndFunc
+Func _SR_Hints()
+    Local $a[] = [ _
+        "Operation that requires this secondary resource (must exist in Operations tab)", _
+        "Work center where the op runs", _
+        "Machine where the op runs (primary resource)", _
+        "Labor/tool qualification required. Example: OPERATOR, WELDER", _
+        "Capacity calendar controlling availability of the secondary resource"]
+    Return $a
+EndFunc
 Func _SR_Add()
-    Local $aFields[] = ["Operation ID","CT ID","Machine ID","Qualification ID","Capacity calendar ID"]
-    Local $aResult = _ShowRowDialog("Add secondary resource", $aFields, 0)
-    If IsArray($aResult) Then GUICtrlCreateListViewItem($aResult[0] & "|" & $aResult[1] & "|" & $aResult[2] & "|" & $aResult[3] & "|" & $aResult[4], $g_hLV_SR)
+    Local $aFields = _SR_Fields()
+    Local $aHints  = _SR_Hints()
+    Local $aVals[] = ["MILL","Milling","Milling_1","OPERATOR","Cal_1x8"]
+    Local $aResult = _ShowRowDialog("Add secondary resource", $aFields, $aVals, $aHints)
+    If IsArray($aResult) Then _AddSR($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4])
 EndFunc
 Func _SR_Edit()
+    _LV_EditSelectedRow($g_hLV_SR, "Edit secondary resource", _SR_Fields(), _SR_Hints())
 EndFunc
 Func _SR_Del()
-	_GUICtrlListView_DeleteItem($g_hLV_SR, _GUICtrlListView_GetSelectedIndices($g_hLV_SR))
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_SR)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_SR, Number($sSel))
+    _LV_Renumber($g_hLV_SR)
 EndFunc
 Func _SR_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_SR)
+    _GUICtrlListView_DeleteAllItems($g_hLV_SR)
+    _LV_Renumber($g_hLV_SR)
+EndFunc
+Func _SR_LoadEx()
+    _LoadExampleSR()
 EndFunc
 
 ;=============================================================================
 ; HANDLERS - CAPACIDADE
 ;=============================================================================
+Func _Cap_Fields()
+    Local $a[] = ["Capacity calendar ID","Start day","Start time","End day","End time","Resource count"]
+    Return $a
+EndFunc
+Func _Cap_Hints()
+    Local $a[] = [ _
+        "Unique capacity calendar code. Example: Cap_1x8", _
+        "Day of week (1=Mon ... 7=Sun)", _
+        "Start time HH:MM. Example: 08:00", _
+        "Day of week (1=Mon ... 7=Sun)", _
+        "End time HH:MM. Example: 17:00", _
+        "Number of concurrent resources available during this shift"]
+    Return $a
+EndFunc
 Func _Cap_Add()
-    Local $aFields[] = ["Capacity calendar ID","Dia Inicio (1-7)","Start time (HH:MM)","Dia Fim (1-7)","End time (HH:MM)","Resource count"]
-    Local $aResult = _ShowRowDialog("Add capacity calendar", $aFields, 0)
-    If IsArray($aResult) Then GUICtrlCreateListViewItem($aResult[0] & "|" & $aResult[1] & "|" & $aResult[2] & "|" & $aResult[3] & "|" & $aResult[4] & "|" & $aResult[5], $g_hLV_Cap)
+    Local $aFields = _Cap_Fields()
+    Local $aHints  = _Cap_Hints()
+    Local $aVals[] = ["Cap_1x8","1","08:00","1","17:00","2"]
+    Local $aResult = _ShowRowDialog("Add capacity calendar", $aFields, $aVals, $aHints)
+    If IsArray($aResult) Then _AddCap($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4],$aResult[5])
 EndFunc
 Func _Cap_Edit()
+    _LV_EditSelectedRow($g_hLV_Cap, "Edit capacity calendar", _Cap_Fields(), _Cap_Hints())
 EndFunc
 Func _Cap_Del()
-	_GUICtrlListView_DeleteItem($g_hLV_Cap, _GUICtrlListView_GetSelectedIndices($g_hLV_Cap))
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Cap)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_Cap, Number($sSel))
+    _LV_Renumber($g_hLV_Cap)
 EndFunc
 Func _Cap_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_Cap)
+    _GUICtrlListView_DeleteAllItems($g_hLV_Cap)
+    _LV_Renumber($g_hLV_Cap)
+EndFunc
+Func _Cap_LoadEx()
+    _LoadExampleCap()
 EndFunc
 
 ;=============================================================================
 ; HANDLERS - ESTOQUE
 ;=============================================================================
+Func _Stk_Fields()
+    Local $a[] = ["Item ID","Routing ID","Version","Movement date","Quantity"]
+    Return $a
+EndFunc
+Func _Stk_Hints()
+    Local $a[] = [ _
+        "Item being moved (must exist in Items tab)", _
+        "Routing associated with the item (for receipts linked to production)", _
+        "Item version (STD, SPT, 00, ...)", _
+        "Movement date in dd/mm/yyyy. Example: 15/02/2025", _
+        "Positive = receipt (+), negative = issue (-)"]
+    Return $a
+EndFunc
 Func _Stk_Add()
-    Local $aFields[] = ["Item ID","Routing ID","Versao","Movement date (dd/mm/yyyy)","Quantidade"]
-    Local $aResult = _ShowRowDialog("Add inventory movement", $aFields, 0)
-    If IsArray($aResult) Then GUICtrlCreateListViewItem($aResult[0] & "|" & $aResult[1] & "|" & $aResult[2] & "|" & $aResult[3] & "|" & $aResult[4], $g_hLV_Stk)
+    Local $aFields = _Stk_Fields()
+    Local $aHints  = _Stk_Hints()
+    Local $aVals[] = ["R_Eixos","","00","15/02/2025","500"]
+    Local $aResult = _ShowRowDialog("Add inventory movement", $aFields, $aVals, $aHints)
+    If IsArray($aResult) Then _AddStk($aResult[0],$aResult[1],$aResult[2],$aResult[3],$aResult[4])
 EndFunc
 Func _Stk_Edit()
+    _LV_EditSelectedRow($g_hLV_Stk, "Edit inventory movement", _Stk_Fields(), _Stk_Hints())
 EndFunc
 Func _Stk_Del()
-	_GUICtrlListView_DeleteItem($g_hLV_Stk, _GUICtrlListView_GetSelectedIndices($g_hLV_Stk))
+    Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Stk)
+    If $sSel = "" Then
+        MsgBox(48, "No row selected", "Please select a row first.")
+        Return
+    EndIf
+    _GUICtrlListView_DeleteItem($g_hLV_Stk, Number($sSel))
+    _LV_Renumber($g_hLV_Stk)
 EndFunc
 Func _Stk_DelAll()
-	_GUICtrlListView_DeleteAllItems($g_hLV_Stk)
+    _GUICtrlListView_DeleteAllItems($g_hLV_Stk)
+    _LV_Renumber($g_hLV_Stk)
+EndFunc
+Func _Stk_LoadEx()
+    _LoadExampleStk()
+EndFunc
+
+;=============================================================================
+; ROW APPEND HELPERS for WOL / SR / Cap / Stk (kept here so Add and
+; LoadExample functions share the same column layout)
+;=============================================================================
+Func _AddWOLink($sPredWO, $sPredRot, $nPredPh, $sSuccWO, $sSuccRot, $nSuccPh, $sType)
+    _LV_AppendDataRow($g_hLV_WOL, $sPredWO & "|" & $sPredRot & "|" & $nPredPh & "|" & _
+        $sSuccWO & "|" & $sSuccRot & "|" & $nSuccPh & "|" & $sType)
+EndFunc
+
+Func _AddSR($sOp, $sCT, $sMach, $sQualif, $sCapCal)
+    _LV_AppendDataRow($g_hLV_SR, $sOp & "|" & $sCT & "|" & $sMach & "|" & $sQualif & "|" & $sCapCal)
+EndFunc
+
+Func _AddCap($sID, $nDiaI, $sHoraI, $nDiaF, $sHoraF, $nRes)
+    _LV_AppendDataRow($g_hLV_Cap, $sID & "|" & $nDiaI & "|" & $sHoraI & "|" & $nDiaF & "|" & $sHoraF & "|" & $nRes)
+EndFunc
+
+Func _AddStk($sItem, $sRot, $sVer, $sDate, $nQty)
+    _LV_AppendDataRow($g_hLV_Stk, $sItem & "|" & $sRot & "|" & $sVer & "|" & $sDate & "|" & $nQty)
+EndFunc
+
+;=============================================================================
+; SAMPLE DATA for tabs that didn't have an example loader before
+;=============================================================================
+Func _LoadExampleWOLinks()
+    ; Example: WO002 must wait for WO001 to finish (Finish-Start on phase 10)
+    _AddWOLink("WO001", "STD_GB", 10, "WO002", "STD_GB", 10, "FS")
+    _AddWOLink("WO002", "STD_GB", 10, "WO003", "SPT_GB", 10, "FS")
+EndFunc
+
+Func _LoadExampleSR()
+    ; Example: milling and drilling operations require an operator;
+    ; assembly requires a qualified technician
+    _AddSR("MILL", "Milling",        "Milling_1",    "OPERATOR",  "Cal_1x8")
+    _AddSR("MILL", "Milling",        "Milling_2",    "OPERATOR",  "Cal_1x8")
+    _AddSR("DRIL", "Drilling",       "Drilling_1",   "OPERATOR",  "Cal_1x8")
+    _AddSR("ASSY", "Assembly_Robot", "Assy_Robot_1", "TECHNICIAN","Cal_2x8")
+EndFunc
+
+Func _LoadExampleCap()
+    ; Example: 1x8 shift Mon-Fri with 2 resources
+    _AddCap("Cap_1x8", 1, "08:00", 1, "17:00", 2)
+    _AddCap("Cap_1x8", 2, "08:00", 2, "17:00", 2)
+    _AddCap("Cap_1x8", 3, "08:00", 3, "17:00", 2)
+    _AddCap("Cap_1x8", 4, "08:00", 4, "17:00", 2)
+    _AddCap("Cap_1x8", 5, "08:00", 5, "17:00", 2)
+    ; 2x8 shift
+    _AddCap("Cap_2x8", 1, "08:00", 2, "00:00", 4)
+EndFunc
+
+Func _LoadExampleStk()
+    ; Example: raw material receipts and a semi-finished issue
+    _AddStk("R_Eixos",  "", "00",  "15/02/2025",  500)
+    _AddStk("R_Carter", "", "00",  "15/02/2025",  200)
+    _AddStk("STD_Eixos","STD_AX", "STD", "20/02/2025", -10)
 EndFunc
 
 ;=============================================================================
@@ -1274,6 +1781,9 @@ EndFunc
 ; GERACAO DO SQL
 ;=============================================================================
 Func _GenerateSQL()
+    Local $nIntegrity = _IntegrityCheck(False, True, "generate the SQL")
+    If $nIntegrity = -1 Then Return
+
     Local $sSQL = ""
     Local $bClear = (GUICtrlRead($g_chkClearFirst) = $GUI_CHECKED)
     Local $bTrans = (GUICtrlRead($g_chkTransaction) = $GUI_CHECKED)
@@ -1346,8 +1856,108 @@ EndFunc
 ;=============================================================================
 ; SQL GENERATION FUNCTIONS
 ;=============================================================================
+
+Func _NormalizeTimeText($vTime)
+    Local $s = StringStripWS(String($vTime), 3)
+    If $s = "" Then Return ""
+
+    If StringInStr($s, ":") Then
+        Local $a = StringSplit($s, ":", 1)
+        If $a[0] >= 2 Then
+            Local $h = Number($a[1])
+            Local $m = Number($a[2])
+            If $h >= 0 And $h <= 23 And $m >= 0 And $m <= 59 Then Return StringFormat("%02d:%02d", $h, $m)
+        EndIf
+    EndIf
+
+    If StringRegExp($s, "^\d+[\.,]\d+$") Then
+        Local $f = Number(StringReplace($s, ",", "."))
+        If $f >= 0 And $f < 1 Then
+            Local $nMin = Round($f * 24 * 60, 0)
+            Local $h2 = Int($nMin / 60)
+            Local $m2 = Mod($nMin, 60)
+            If $h2 >= 0 And $h2 <= 23 Then Return StringFormat("%02d:%02d", $h2, $m2)
+        EndIf
+        If $f >= 0 And $f <= 23.999 Then
+            Local $h3 = Int($f)
+            Local $m3 = Round(($f - $h3) * 60, 0)
+            If $m3 = 60 Then
+                $h3 += 1
+                $m3 = 0
+            EndIf
+            If $h3 >= 0 And $h3 <= 23 And $m3 >= 0 And $m3 <= 59 Then Return StringFormat("%02d:%02d", $h3, $m3)
+        EndIf
+    EndIf
+
+    Local $sDigits = StringRegExpReplace($s, "\D", "")
+    If $sDigits = "" Then Return ""
+
+    Switch StringLen($sDigits)
+        Case 1, 2
+            Local $h4 = Number($sDigits)
+            If $h4 >= 0 And $h4 <= 23 Then Return StringFormat("%02d:00", $h4)
+        Case 3
+            Local $h5 = Number(StringLeft($sDigits, 1))
+            Local $m5 = Number(StringRight($sDigits, 2))
+            If $h5 >= 0 And $h5 <= 23 And $m5 >= 0 And $m5 <= 59 Then Return StringFormat("%02d:%02d", $h5, $m5)
+        Case Else
+            $sDigits = StringRight($sDigits, 4)
+            Local $h6 = Number(StringLeft($sDigits, 2))
+            Local $m6 = Number(StringRight($sDigits, 2))
+            If $h6 >= 0 And $h6 <= 23 And $m6 >= 0 And $m6 <= 59 Then Return StringFormat("%02d:%02d", $h6, $m6)
+    EndSwitch
+
+    Return ""
+EndFunc
+
+Func _InferBPeriTimeMode()
+    Local $sMode = "text"
+    If Not $g_bConnected Or $g_sConnStr = "" Then Return $sMode
+
+    Local $oConn = ObjCreate("ADODB.Connection")
+    If Not IsObj($oConn) Then Return $sMode
+    $g_sLastComError = ""
+    $oConn.Open($g_sConnStr)
+    If $g_sLastComError <> "" Or $oConn.State <> 1 Then Return $sMode
+
+    $g_sLastComError = ""
+    Local $oRS = $oConn.Execute("SELECT TOP 1 DEB_PERIO FROM B_PERI WHERE DEB_PERIO IS NOT NULL")
+    If $g_sLastComError = "" And IsObj($oRS) And Not $oRS.EOF Then
+        Local $sSample = StringStripWS(String($oRS.Fields(0).Value), 3)
+        If StringInStr($sSample, ":") Then
+            $sMode = "text"
+        ElseIf StringRegExp($sSample, "^\d+$") Then
+            Local $n = Number($sSample)
+            If $n >= 0 And $n <= 23 Then
+                $sMode = "hour"
+            Else
+                $sMode = "hhmm"
+            EndIf
+        EndIf
+        $oRS.Close()
+    EndIf
+    $oConn.Close()
+    _Log("B_PERI time mode detected: " & $sMode)
+    Return $sMode
+EndFunc
+
+Func _TimeToSQLLiteral($vTime, $sMode)
+    Local $sNorm = _NormalizeTimeText($vTime)
+    If $sNorm = "" Then Return "''"
+
+    Switch StringLower($sMode)
+        Case "hour"
+            Return String(Number(StringLeft($sNorm, 2)))
+        Case "hhmm"
+            Return String(Number(StringLeft($sNorm, 2) & StringRight($sNorm, 2)))
+        Case Else
+            Return "'" & $sNorm & "'"
+    EndSwitch
+EndFunc
+
 Func _GenerateCalSQL()
     Local $s = ""
+    Local $sTimeMode = _InferBPeriTimeMode()
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Cal)
     For $i = 0 To $nRows - 1
         Local $sID    = _GUICtrlListView_GetItemText($g_hLV_Cal, $i, 0)
@@ -1357,15 +1967,19 @@ Func _GenerateCalSQL()
         Local $sDiaF  = _GUICtrlListView_GetItemText($g_hLV_Cal, $i, 4)
         Local $sHoraF = _GUICtrlListView_GetItemText($g_hLV_Cal, $i, 5)
 
-        ; Insercao em B_CAL (um registro por ID unico)
+        Local $sHoraISQL = _TimeToSQLLiteral($sHoraI, $sTimeMode)
+        Local $sHoraFSQL = _TimeToSQLLiteral($sHoraF, $sTimeMode)
+
+        If $sHoraISQL = "''" Or $sHoraFSQL = "''" Then
+            _Log("WARNING: Calendar row " & ($i + 1) & " has an invalid time format. Start='" & $sHoraI & "' End='" & $sHoraF & "'")
+        EndIf
+
         $s &= "IF NOT EXISTS (SELECT 1 FROM B_CAL WHERE NOCALHEBD='" & $sID & "')" & @CRLF
         $s &= "    INSERT INTO B_CAL (NOCALHEBD, NOMCAL) VALUES ('" & $sID & "', '" & $sNome & "');" & @CRLF
 
-        ; Insercao dos periodos em B_PERI
-        Local $sHI = StringReplace($sHoraI, ":", "")
-        Local $sHF = StringReplace($sHoraF, ":", "")
-        $s &= "INSERT INTO B_PERI (NOCALHEBD, NOJOUR_DEB, DEB_PERIO, NOJOUR_FIN, FIN_PERIO) " & @CRLF
-        $s &= "    VALUES ('" & $sID & "', " & $sDiaI & ", " & $sHI & ", " & $sDiaF & ", " & $sHF & ");" & @CRLF
+        $s &= "IF NOT EXISTS (SELECT 1 FROM B_PERI WHERE NOCALHEBD='" & $sID & "' AND NOJOUR_DEB=" & $sDiaI & " AND DEB_PERIO=" & $sHoraISQL & ")" & @CRLF
+        $s &= "    INSERT INTO B_PERI (NOCALHEBD, NOJOUR_DEB, DEB_PERIO, NOJOUR_FIN, FIN_PERIO) " & @CRLF
+        $s &= "    VALUES ('" & $sID & "', " & $sDiaI & ", " & $sHoraISQL & ", " & $sDiaF & ", " & $sHoraFSQL & ");" & @CRLF
     Next
     Return $s
 EndFunc
@@ -1437,7 +2051,8 @@ Func _GenerateRoutSQL()
 
         $s &= "IF NOT EXISTS (SELECT 1 FROM B_GAMM WHERE NOMG='" & $sID & "')" & @CRLF
         $s &= "    INSERT INTO B_GAMM (NOMG, LIBGAM) VALUES ('" & $sID & "', '" & $sNome & "');" & @CRLF
-        $s &= "INSERT INTO B_PHAS (NOMG, NOPHASE, OPE, LIBPHASE) VALUES ('" & $sID & "', " & $nFase & ", '" & $sOp & "', '" & $sNomF & "');" & @CRLF
+        $s &= "IF NOT EXISTS (SELECT 1 FROM B_PHAS WHERE NOMG='" & $sID & "' AND NOPHASE=" & $nFase & ")" & @CRLF
+        $s &= "    INSERT INTO B_PHAS (NOMG, NOPHASE, OPE, LIBPHASE) VALUES ('" & $sID & "', " & $nFase & ", '" & $sOp & "', '" & $sNomF & "');" & @CRLF
     Next
     Return $s
 EndFunc
@@ -1455,7 +2070,8 @@ Func _GenerateMatSQL()
 
         $s &= "IF NOT EXISTS (SELECT 1 FROM B_ART WHERE CODEARTIC='" & $sID & "')" & @CRLF
         $s &= "    INSERT INTO B_ART (CODEARTIC, LIBARTIC, TYPEMATI, QTE_STOCK) VALUES ('" & $sID & "', '" & $sNome & "', '" & $sTipo & "', " & $nStk & ");" & @CRLF
-        $s &= "INSERT INTO B_VER_ART (CODEARTIC, VER_ART, VER_DESC, NOMG, VER_EFFET_DEBUT, VER_EFFET_FIN)" & @CRLF
+        $s &= "IF NOT EXISTS (SELECT 1 FROM B_VER_ART WHERE CODEARTIC='" & $sID & "' AND VER_ART='" & $sVer & "')" & @CRLF
+        $s &= "    INSERT INTO B_VER_ART (CODEARTIC, VER_ART, VER_DESC, NOMG, VER_EFFET_DEBUT, VER_EFFET_FIN)" & @CRLF
         $s &= "    VALUES ('" & $sID & "', '" & $sVer & "', '" & $sNome & "', '" & $sRot & "', CONVERT(datetime,'01/01/1995',103), CONVERT(datetime,'01/01/2050',103));" & @CRLF
     Next
     Return $s
@@ -1478,7 +2094,8 @@ Func _GenerateBOMSQL()
         Local $nQRef   = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 5)
         Local $nQNec   = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 6)
 
-        $s &= "INSERT INTO B_NOME (B_V_CODEARTIC, VER_ART, CODEARTIC, NOMG, NOPHASE, " & $sQtyBase & ", " & $sQtyNec & ")" & @CRLF
+        $s &= "IF NOT EXISTS (SELECT 1 FROM B_NOME WHERE B_V_CODEARTIC='" & $sPaiID & "' AND VER_ART='" & $sVPai & "' AND CODEARTIC='" & $sCompID & "' AND NOMG='" & $sRotID & "' AND NOPHASE=" & $nFase & ")" & @CRLF
+        $s &= "    INSERT INTO B_NOME (B_V_CODEARTIC, VER_ART, CODEARTIC, NOMG, NOPHASE, " & $sQtyBase & ", " & $sQtyNec & ")" & @CRLF
         $s &= "    VALUES ('" & $sPaiID & "', '" & $sVPai & "', '" & $sCompID & "', '" & $sRotID & "', " & $nFase & ", " & $nQRef & ", " & $nQNec & ");" & @CRLF
     Next
     Return $s
@@ -1572,7 +2189,8 @@ Func _GenerateWOSQL()
             $sValList &= ", 'C'"
         EndIf
 
-        $s &= "INSERT INTO B_OF (" & $sColList & ")" & @CRLF
+        $s &= "IF NOT EXISTS (SELECT 1 FROM B_OF WHERE NOF='" & $sNum & "')" & @CRLF
+        $s &= "    INSERT INTO B_OF (" & $sColList & ")" & @CRLF
         $s &= "    VALUES (" & $sValList & ");" & @CRLF
     Next
     Return $s
@@ -1592,12 +2210,59 @@ Func _GenerateWOLSQL()
         Local $sFas_S = _GUICtrlListView_GetItemText($g_hLV_WOL, $i, 5)
         Local $sTipo  = _GUICtrlListView_GetItemText($g_hLV_WOL, $i, 6)
 
-        $s &= "INSERT INTO B_PROF (NOF, NOMG, NOPHASE, B_O_NOF, B_P_NOMG, B_P_NOPHASE, PROF_TYPEPREC)" & @CRLF
+        $s &= "IF NOT EXISTS (SELECT 1 FROM B_PROF WHERE NOF='" & $sNOF_S & "' AND NOMG='" & $sNOMG_S & "' AND NOPHASE=" & $sFas_S & " AND B_O_NOF='" & $sNOF_P & "' AND B_P_NOMG='" & $sNOMG_P & "' AND B_P_NOPHASE=" & $sFas_P & ")" & @CRLF
+        $s &= "    INSERT INTO B_PROF (NOF, NOMG, NOPHASE, B_O_NOF, B_P_NOMG, B_P_NOPHASE, PROF_TYPEPREC)" & @CRLF
         $s &= "    VALUES ('" & $sNOF_S & "', '" & $sNOMG_S & "', " & $sFas_S & ", '" & $sNOF_P & "', '" & $sNOMG_P & "', " & $sFas_P & ", '" & $sTipo & "');" & @CRLF
     Next
     Return $s
 EndFunc
 
+
+; Extract the first table name referenced by an INSERT/UPDATE/DELETE/IF NOT EXISTS statement.
+; Returns "?" if it cannot be determined.
+Func _ExtractSQLTableName($sStmt)
+    Local $s = StringStripWS($sStmt, 3)
+    ; Try INSERT INTO <table>
+    Local $aMatch = StringRegExp($s, "(?i)INSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_]*)", 1)
+    If IsArray($aMatch) Then Return $aMatch[0]
+    ; Try UPDATE <table>
+    $aMatch = StringRegExp($s, "(?i)UPDATE\s+([A-Za-z_][A-Za-z0-9_]*)", 1)
+    If IsArray($aMatch) Then Return $aMatch[0]
+    ; Try DELETE FROM <table>
+    $aMatch = StringRegExp($s, "(?i)DELETE\s+FROM\s+([A-Za-z_][A-Za-z0-9_]*)", 1)
+    If IsArray($aMatch) Then Return $aMatch[0]
+    ; Try IF NOT EXISTS (SELECT ... FROM <table>
+    $aMatch = StringRegExp($s, "(?i)FROM\s+([A-Za-z_][A-Za-z0-9_]*)", 1)
+    If IsArray($aMatch) Then Return $aMatch[0]
+    Return "?"
+EndFunc
+
+; Interpret common SQL Server error messages and return a friendly hint string, or "".
+Func _InterpretSQLError($sErr)
+    Local $sU = StringUpper($sErr)
+    If StringInStr($sU, "VIOLATION OF PRIMARY KEY") Or StringInStr($sU, "DUPLICATE KEY") Then
+        Return "Primary key already exists in the target table. The row was previously loaded — this usually happens when you re-run the SQL on a database that already contains the data. The generator adds IF NOT EXISTS guards for known tables; if the error persists, the composite key may not match the guard columns."
+    EndIf
+    If StringInStr($sU, "FOREIGN KEY") Or StringInStr($sU, "REFERENCE CONSTRAINT") Then
+        Return "A foreign key reference is missing. Check that the parent row (item/routing/calendar) exists before inserting the child row. Run FK Pre-validation for more details."
+    EndIf
+    If StringInStr($sU, "CANNOT INSERT THE VALUE NULL") Or StringInStr($sU, "NULL INTO COLUMN") Then
+        Return "A NOT NULL column received an empty value. Check the source row in the corresponding tab."
+    EndIf
+    If StringInStr($sU, "STRING OR BINARY DATA WOULD BE TRUNCATED") Then
+        Return "A value is longer than the target column allows. Shorten the offending field in the source tab."
+    EndIf
+    If StringInStr($sU, "CONVERSION FAILED") Or StringInStr($sU, "ARITHMETIC OVERFLOW") Then
+        Return "A value could not be converted to the target column type. Check numeric/date fields in the source row."
+    EndIf
+    If StringInStr($sU, "INVALID OBJECT NAME") Then
+        Return "The target table does not exist in this database. Check that the Ortems schema is installed."
+    EndIf
+    If StringInStr($sU, "PERMISSION") Or StringInStr($sU, "DENIED") Then
+        Return "The connected user does not have permission to modify this table."
+    EndIf
+    Return ""
+EndFunc
 
 Func _ExecuteSQL()
     If Not $g_bConnected Then
@@ -1619,16 +2284,9 @@ Func _ExecuteSQL()
 
     If $nRet <> 6 Then Return
 
-    ; Pre-flight FK validation before touching the database
-    Local $nFKIssues = _ValidateFKBeforeImport()
-    If $nFKIssues > 0 Then
-        Local $nGo = MsgBox(4 + 48, "FK Validation Warnings", _
-            $nFKIssues & " potential FK reference issue(s) detected." & @CRLF & @CRLF & _
-            "Details written to log.txt." & @CRLF & @CRLF & _
-            "Continue anyway?")
-        If $nGo <> 6 Then Return
-    EndIf
-
+    ; Pre-flight integrity validation before touching the database
+    Local $nFKIssues = _IntegrityCheck(False, True, "run the SQL on the database")
+    If $nFKIssues = -1 Then Return
 
     Local $oConn = ObjCreate("ADODB.Connection")
     If Not IsObj($oConn) Then
@@ -1681,16 +2339,23 @@ Func _ExecuteSQL()
 
         If $g_sLastComError <> "" Then
             $nErr += 1
-            _Log("ERROR (stmt " & $i & "): " & $g_sLastComError)
-            _Log("  >> " & StringLeft(StringStripWS($sStmt, 3), 120))
+            Local $sTbl = _ExtractSQLTableName($sStmt)
+            Local $sHint = _InterpretSQLError($g_sLastComError)
+            _Log("ERROR (stmt " & $i & ") on table [" & $sTbl & "]: " & $g_sLastComError)
+            If $sHint <> "" Then _Log("  HINT: " & $sHint)
+            ; Show up to 400 chars of the offending statement (multiple lines preserved)
+            Local $sStmtClean = StringStripWS($sStmt, 3)
+            If StringLen($sStmtClean) > 400 Then $sStmtClean = StringLeft($sStmtClean, 400) & " ..."
+            _Log("  >> " & StringReplace($sStmtClean, @CRLF, " | "))
             If $bTransStarted Then
                 $g_sLastComError = ""
                 $oConn.RollbackTrans()
                 $oConn.Close()
                 _Log("Transaction ROLLED BACK due to error.")
-                MsgBox(16, "Execution error", _
-                    "A SQL error occurred — the transaction was rolled back." & @CRLF & @CRLF & _
-                    "Check the execution log and log.txt for details.")
+                Local $sMsg = "A SQL error occurred on table [" & $sTbl & "] — the transaction was rolled back." & @CRLF & @CRLF
+                If $sHint <> "" Then $sMsg &= $sHint & @CRLF & @CRLF
+                $sMsg &= "Check the execution log and log.txt for details."
+                MsgBox(16, "Execution error", $sMsg)
                 Return
             EndIf
         Else
@@ -1799,60 +2464,279 @@ EndFunc
 ; The DB was just cleared, so checking against the DB would always warn.
 ; Instead we verify that IDs referenced in one tab exist in another tab.
 ;=============================================================================
+Func _IntegrityCheck($p1 = "", $p2 = "", $p3 = "")
+    Local $bShowSuccess = True
+    Local $bAskToContinue = False
+    Local $sAction = ""
+
+    If @NumParams >= 1 Then $bShowSuccess = $p1
+    If @NumParams >= 2 Then $bAskToContinue = $p2
+    If @NumParams >= 3 Then $sAction = $p3
+
+    Local $nIssues = _ValidateFKBeforeImport()
+    If $nIssues = 0 Then
+        If $bShowSuccess Then
+            MsgBox(64, "Integrity Check", _
+                "No cross-tab reference issue was found." & @CRLF & @CRLF & _
+                "The data is consistent and ready for SQL generation.")
+        EndIf
+        Return 0
+    EndIf
+
+    Local $sMsg = _IntegrityBuildMessage($nIssues)
+    Local $nFixChoice = MsgBox(3 + 48, "Integrity Check", _
+        $sMsg & @CRLF & @CRLF & _
+        "Do you want to try automatic correction for simple references now?" & @CRLF & @CRLF & _
+        "Yes = try auto-fix" & @CRLF & _
+        "No = keep current values" & @CRLF & _
+        "Cancel = stop")
+
+    If $nFixChoice = 2 Then Return -1
+
+    If $nFixChoice = 6 Then
+        Local $nFixed = _AutoFixSimpleReferences()
+        If $nFixed > 0 Then
+            Local $nRemaining = _ValidateFKBeforeImport()
+            If $nRemaining = 0 Then
+                MsgBox(64, "Integrity Check", _
+                    "Automatic correction updated " & $nFixed & " field(s)." & @CRLF & @CRLF & _
+                    "All cross-tab references are now consistent.")
+                Return 0
+            EndIf
+
+            $nIssues = $nRemaining
+            $sMsg = "Automatic correction updated " & $nFixed & " field(s), but some issues still remain." & @CRLF & @CRLF & _
+                _IntegrityBuildMessage($nIssues)
+        Else
+            $sMsg = "No simple reference could be corrected automatically." & @CRLF & @CRLF & _
+                _IntegrityBuildMessage($nIssues)
+        EndIf
+    EndIf
+
+    If $bAskToContinue Then
+        Local $sQuestion = $sMsg
+        If $sAction <> "" Then $sQuestion &= @CRLF & @CRLF & "Do you still want to " & $sAction & "?"
+        Local $nRet = MsgBox(4 + 48, "Integrity Check", $sQuestion)
+        If $nRet <> 6 Then Return -1
+    ElseIf $nFixChoice = 6 Then
+        MsgBox(48, "Integrity Check", $sMsg)
+    EndIf
+
+    Return $nIssues
+EndFunc
+
 Func _ValidateFKBeforeImport()
     Local $nIssues = 0
-    _Log("=== FK Pre-validation started (checking import data consistency) ===")
+    $g_sIntegrityReport = ""
+    _Log("=== Integrity Check started (cross-tab reference validation) ===")
 
-    ; Build lookup sets from each source tab (semicolon-delimited unique values)
-    Local $setCalIDs  = _LVColSet($g_hLV_Cal,  0)   ; Calendar IDs
-    Local $setOpeIDs  = _LVColSet($g_hLV_Ops,  0)   ; Operation IDs
-    Local $setRoutIDs = _LVColSet($g_hLV_Rout, 0)   ; Routing IDs
-    Local $setMatIDs  = _LVColSet($g_hLV_Mat,  0)   ; Item IDs
+    ; Reference sets
+    Local $setCalIDs         = _LVColSet($g_hLV_Cal, 0)
+    Local $setCapCalIDs      = _LVColSet($g_hLV_Cap, 0)
+    Local $setAnyCalIDs      = $setCalIDs & StringTrimLeft($setCapCalIDs, 1)
+    Local $setCTIDs          = _LVColSet($g_hLV_Mach, 2)
+    Local $setMachIDs        = _LVColSet($g_hLV_Mach, 7)
+    Local $setCTMach         = _LVCompositeSet($g_hLV_Mach, "2,7")
+    Local $setOpeIDs         = _LVColSet($g_hLV_Ops, 0)
+    Local $setOpeCTMach      = _LVCompositeSet($g_hLV_Ops, "0,2,3")
+    Local $setRoutIDs        = _LVColSet($g_hLV_Rout, 0)
+    Local $setRoutPhase      = _LVCompositeSet($g_hLV_Rout, "0,2")
+    Local $setMatIDs         = _LVColSet($g_hLV_Mat, 0)
+    Local $setMatVer         = _LVCompositeSet($g_hLV_Mat, "0,3")
+    Local $setMatRoutVer     = _LVCompositeSet($g_hLV_Mat, "0,4,3")
+    Local $setMatVerRout     = _LVCompositeSet($g_hLV_Mat, "0,3,4")
+    Local $setWOIDs          = _LVColSet($g_hLV_WO, 0)
+    Local $setWORout         = _LVCompositeSet($g_hLV_WO, "0,2")
 
-    ; Machines col 10 = Calendar ID
-    $nIssues += _CrossCheck($g_hLV_Mach, 10, $setCalIDs,  "Machine -> Calendar")
+    ; Cross-tab checks
+    $nIssues += _CrossCheckMachineCalendarRef($g_hLV_Mach, 4, 10, $setCalIDs, "Machines tab / Calendar ID")
+    $nIssues += _CrossCheck($g_hLV_Mach, 11, $setAnyCalIDs,  "Machines tab / Capacity calendar ID", True)
 
-    ; Routings col 3 = Operation ID
-    $nIssues += _CrossCheck($g_hLV_Rout, 3,  $setOpeIDs,  "Routing -> Operation")
+    $nIssues += _CrossCheck($g_hLV_Ops,  2, $setCTIDs,       "Operations tab / WC ID")
+    $nIssues += _CrossCheckMachineRef($g_hLV_Ops,  3, $setMachIDs, "Operations tab / Machine ID")
+    $nIssues += _CrossCheckCompositeMachineRef($g_hLV_Ops, "2,3", 3, $setCTMach, "Operations tab / WC ID + Machine ID")
 
-    ; Items col 4 = Routing ID (optional — blank means no routing)
-    $nIssues += _CrossCheck($g_hLV_Mat,  4,  $setRoutIDs, "Item -> Routing", True)
+    $nIssues += _CrossCheck($g_hLV_Rout, 3, $setOpeIDs,      "Routings tab / Operation ID")
 
-    ; Work Orders col 1 = Item ID
-    $nIssues += _CrossCheck($g_hLV_WO,   1,  $setMatIDs,  "WO -> Item")
+    $nIssues += _CrossCheckItemRoutingRef($g_hLV_Mat, 2, 4, $setRoutIDs, "Items tab / Routing ID", True)
 
-    ; Work Orders col 2 = Routing ID
-    $nIssues += _CrossCheck($g_hLV_WO,   2,  $setRoutIDs, "WO -> Routing")
+    $nIssues += _CrossCheck($g_hLV_BOM,          3,       $setRoutIDs,     "BOM tab / Routing ID")
 
-    ; BOM col 0 = Parent item ID
-    $nIssues += _CrossCheck($g_hLV_BOM,  0,  $setMatIDs,  "BOM -> Parent item")
+    $nIssues += _CrossCheckComposite($g_hLV_WO,  "1,2,3", $setMatRoutVer,  "Work Orders tab / Item + routing + version")
 
-    ; BOM col 2 = Component item ID
-    $nIssues += _CrossCheck($g_hLV_BOM,  2,  $setMatIDs,  "BOM -> Component item")
+    $nIssues += _CrossCheck($g_hLV_WOL,          0,       $setWOIDs,       "WO Links tab / Predecessor WO", True)
+    $nIssues += _CrossCheck($g_hLV_WOL,          3,       $setWOIDs,       "WO Links tab / Successor WO", True)
+    $nIssues += _CrossCheckComposite($g_hLV_WOL, "0,1",   $setWORout,      "WO Links tab / Predecessor WO + routing", True)
+    $nIssues += _CrossCheckComposite($g_hLV_WOL, "3,4",   $setWORout,      "WO Links tab / Successor WO + routing", True)
+    $nIssues += _CrossCheckComposite($g_hLV_WOL, "1,2",   $setRoutPhase,   "WO Links tab / Predecessor routing + phase", True)
+    $nIssues += _CrossCheckComposite($g_hLV_WOL, "4,5",   $setRoutPhase,   "WO Links tab / Successor routing + phase", True)
+
+    $nIssues += _CrossCheck($g_hLV_SR,           0,       $setOpeIDs,      "Secondary Resources tab / Operation ID")
+    $nIssues += _CrossCheck($g_hLV_SR,           1,       $setCTIDs,       "Secondary Resources tab / WC ID")
+    $nIssues += _CrossCheckMachineRef($g_hLV_SR, 2,       $setMachIDs,     "Secondary Resources tab / Machine ID")
+    $nIssues += _CrossCheckCompositeMachineRef($g_hLV_SR, "0,1,2", 2, $setOpeCTMach, "Secondary Resources tab / Operation + WC + Machine")
+    $nIssues += _CrossCheck($g_hLV_SR,           4,       $setAnyCalIDs,   "Secondary Resources tab / Capacity calendar ID", True)
+
+    $nIssues += _CrossCheckComposite($g_hLV_Stk, "0,2",   $setMatVer,      "Inventory Movements tab / Item + version")
+    $nIssues += _CrossCheck($g_hLV_Stk,          1,       $setRoutIDs,     "Inventory Movements tab / Routing ID", True)
+    $nIssues += _CrossCheckComposite($g_hLV_Stk, "0,1,2", $setMatRoutVer,  "Inventory Movements tab / Item + routing + version", True)
+
+    ; Format checks
+    $nIssues += _ValidateCalendarFormats()
+    $nIssues += _ValidateCapacityFormats()
+    $nIssues += _ValidateWODates()
+    $nIssues += _ValidateStockDates()
 
     If $nIssues = 0 Then
-        _Log("=== FK Pre-validation OK — all cross-references are consistent ===")
+        _Log("=== Integrity Check OK — all cross-tab references are consistent ===")
     Else
-        _Log("=== FK Pre-validation: " & $nIssues & " issue(s) found — see above ===")
+        _Log("=== Integrity Check finished with " & $nIssues & " issue(s) ===")
     EndIf
     Return $nIssues
 EndFunc
 
-; Build a semicolon-wrapped string of unique non-empty values from a ListView column
-; e.g.  ";Cal_1x8;Cal_2x8;"  so StringInStr(set, ";X;") works as exact match
 Func _LVColSet($hLV, $iCol)
     Local $sSet = ";"
     Local $nRows = _GUICtrlListView_GetItemCount($hLV)
     For $i = 0 To $nRows - 1
         Local $sVal = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iCol), 3)
-        If $sVal <> "" And Not StringInStr($sSet, ";" & $sVal & ";") Then
-            $sSet &= $sVal & ";"
-        EndIf
+        If $sVal <> "" And Not StringInStr($sSet, ";" & $sVal & ";") Then $sSet &= $sVal & ";"
     Next
     Return $sSet
 EndFunc
 
-; Cross-check: every non-empty value in column $iCol of $hLV must appear in $sSet
+Func _LVCompositeSet($hLV, $sCols)
+    Local $sSet = ";"
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        Local $sKey = _LVComposeKey($hLV, $i, $sCols)
+        If $sKey <> "" And Not StringInStr($sSet, ";" & $sKey & ";") Then $sSet &= $sKey & ";"
+    Next
+    Return $sSet
+EndFunc
+
+Func _LVComposeKey($hLV, $iRow, $sCols)
+    Local $aCols = StringSplit($sCols, ",", 1)
+    Local $sKey = ""
+    For $j = 1 To $aCols[0]
+        Local $iCol = Number($aCols[$j])
+        Local $sVal = StringStripWS(_GUICtrlListView_GetItemText($hLV, $iRow, $iCol), 3)
+        If $sVal = "" Then Return ""
+        If $j > 1 Then $sKey &= "|"
+        $sKey &= $sVal
+    Next
+    Return $sKey
+EndFunc
+
+Func _IsStandByMachine($sVal)
+    Local $sNorm = StringUpper(StringStripWS($sVal, 3))
+    $sNorm = StringReplace($sNorm, "-", "")
+    $sNorm = StringReplace($sNorm, "_", "")
+    $sNorm = StringReplace($sNorm, " ", "")
+    Return ($sNorm = "STANDBY")
+EndFunc
+
+Func _IsRawMaterialType($sVal)
+    Local $sNorm = StringUpper(StringStripWS($sVal, 3))
+    Return ($sNorm = "MP")
+EndFunc
+
+Func _IsMachineCalendarOptional($sCTType)
+    Local $sNorm = StringStripWS($sCTType, 3)
+    Return ($sNorm = "4")
+EndFunc
+
+Func _CrossCheckMachineCalendarRef($hLV, $iCTTypeCol, $iCalCol, $sSet, $sDesc, $bAllowEmpty = False)
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+
+    For $i = 0 To $nRows - 1
+        Local $sCTType = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iCTTypeCol), 3)
+        If _IsMachineCalendarOptional($sCTType) Then ContinueLoop
+
+        Local $sVal = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iCalCol), 3)
+        If $sVal = "" Then
+            If $bAllowEmpty Then ContinueLoop
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": empty value.")
+            ContinueLoop
+        EndIf
+
+        If Not StringInStr($sSet, ";" & $sVal & ";") Then
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sVal & "' does not exist in the referenced tab.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _CrossCheckItemRoutingRef($hLV, $iTypeCol, $iRoutingCol, $sSet, $sDesc, $bAllowEmpty = False)
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+
+    For $i = 0 To $nRows - 1
+        Local $sType = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iTypeCol), 3)
+        If _IsRawMaterialType($sType) Then ContinueLoop
+
+        Local $sVal = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iRoutingCol), 3)
+        If $sVal = "" Then
+            If $bAllowEmpty Then ContinueLoop
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": empty value.")
+            ContinueLoop
+        EndIf
+
+        If Not StringInStr($sSet, ";" & $sVal & ";") Then
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sVal & "' does not exist in the referenced tab.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _CrossCheckMachineRef($hLV, $iCol, $sSet, $sDesc, $bAllowEmpty = False)
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        Local $sVal = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iCol), 3)
+        If _IsStandByMachine($sVal) Then ContinueLoop
+        If $sVal = "" Then
+            If $bAllowEmpty Then ContinueLoop
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": empty value.")
+            ContinueLoop
+        EndIf
+        If Not StringInStr($sSet, ";" & $sVal & ";") Then
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sVal & "' does not exist in the referenced tab.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _CrossCheckCompositeMachineRef($hLV, $sCols, $iMachineCol, $sSet, $sDesc, $bAllowEmpty = False)
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+
+    For $i = 0 To $nRows - 1
+        Local $sMachine = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iMachineCol), 3)
+        If _IsStandByMachine($sMachine) Then ContinueLoop
+
+        Local $sKey = _LVComposeKey($hLV, $i, $sCols)
+        If $sKey = "" Then
+            If $bAllowEmpty Then ContinueLoop
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": one or more key fields are empty.")
+            ContinueLoop
+        EndIf
+        If Not StringInStr($sSet, ";" & $sKey & ";") Then
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sKey & "' does not match any valid combination in the referenced tab.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
 Func _CrossCheck($hLV, $iCol, $sSet, $sDesc, $bAllowEmpty = False)
     Local $nIssues = 0
     Local $nRows = _GUICtrlListView_GetItemCount($hLV)
@@ -1861,12 +2745,492 @@ Func _CrossCheck($hLV, $iCol, $sSet, $sDesc, $bAllowEmpty = False)
         If $sVal = "" Then
             If $bAllowEmpty Then ContinueLoop
             $nIssues += 1
-            _Log("FK WARNING [" & $sDesc & "] row " & ($i + 1) & ": empty value")
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": empty value.")
             ContinueLoop
         EndIf
         If Not StringInStr($sSet, ";" & $sVal & ";") Then
             $nIssues += 1
-            _Log("FK WARNING [" & $sDesc & "] row " & ($i + 1) & ": '" & $sVal & "' not found in source tab")
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sVal & "' does not exist in the referenced tab.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _CrossCheckComposite($hLV, $sCols, $sSet, $sDesc, $bAllowEmpty = False)
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        Local $sKey = _LVComposeKey($hLV, $i, $sCols)
+        If $sKey = "" Then
+            If $bAllowEmpty Then ContinueLoop
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": one or more key fields are empty.")
+            ContinueLoop
+        EndIf
+        If Not StringInStr($sSet, ";" & $sKey & ";") Then
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sKey & "' does not match any valid combination in the referenced tab.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _IntegrityIssue($sMsg)
+    $g_sIntegrityReport &= "• " & $sMsg & @CRLF
+    _Log($sMsg)
+EndFunc
+
+Func _IntegrityPreview($iMaxLines = 12)
+    Local $sText = StringStripCR($g_sIntegrityReport)
+    If $sText = "" Then Return ""
+
+    Local $aLines = StringSplit($sText, @LF, 1)
+    Local $sOut = ""
+    Local $nShown = 0
+    Local $nTotal = 0
+
+    For $i = 1 To $aLines[0]
+        Local $sLine = StringStripWS($aLines[$i], 3)
+        If $sLine = "" Then ContinueLoop
+        $nTotal += 1
+        If $nShown < $iMaxLines Then
+            If $sOut <> "" Then $sOut &= @CRLF
+            $sOut &= $sLine
+            $nShown += 1
+        EndIf
+    Next
+
+    If $nTotal > $nShown Then $sOut &= @CRLF & "..."
+    Return $sOut
+EndFunc
+
+Func _IntegrityBuildMessage($nIssues)
+    Local $sPreview = _IntegrityPreview(12)
+    Local $sMsg = $nIssues & " integrity issue(s) were found." & @CRLF & @CRLF
+    If $sPreview <> "" Then $sMsg &= $sPreview & @CRLF & @CRLF
+    $sMsg &= "Full details were written to the execution log and to log.txt."
+    Return $sMsg
+EndFunc
+
+Func _AutoFixSimpleReferences()
+    Local $nFixed = 0
+    _Log("=== Integrity Auto-Fix started ===")
+
+    Local $setCalIDs         = _LVColSet($g_hLV_Cal, 0)
+    Local $setCapCalIDs      = _LVColSet($g_hLV_Cap, 0)
+    Local $setAnyCalIDs      = $setCalIDs & StringTrimLeft($setCapCalIDs, 1)
+    Local $setCTIDs          = _LVColSet($g_hLV_Mach, 2)
+    Local $setMachIDs        = _LVColSet($g_hLV_Mach, 7)
+    Local $setOpeIDs         = _LVColSet($g_hLV_Ops, 0)
+    Local $setRoutIDs        = _LVColSet($g_hLV_Rout, 0)
+    Local $setMatIDs         = _LVColSet($g_hLV_Mat, 0)
+    Local $setWOIDs          = _LVColSet($g_hLV_WO, 0)
+
+    ; Case/spacing normalization against existing IDs
+    $nFixed += _AutoFixMachineCalendarRef($g_hLV_Mach, 4, 10, $setCalIDs, "Machines tab / Calendar ID")
+    $nFixed += _AutoFixExactRef($g_hLV_Mach, 11, $setAnyCalIDs, "Machines tab / Capacity calendar ID", True)
+
+    $nFixed += _AutoFixExactRef($g_hLV_Ops, 2, $setCTIDs,       "Operations tab / WC ID")
+    $nFixed += _AutoFixMachineExactRef($g_hLV_Ops, 3, $setMachIDs, "Operations tab / Machine ID")
+
+    $nFixed += _AutoFixExactRef($g_hLV_Rout, 3, $setOpeIDs,     "Routings tab / Operation ID")
+
+    $nFixed += _AutoFixItemRoutingRef($g_hLV_Mat, 2, 4, $setRoutIDs,     "Items tab / Routing ID", True)
+
+    $nFixed += _AutoFixExactRef($g_hLV_BOM, 3, $setRoutIDs,     "BOM tab / Routing ID")
+
+    $nFixed += _AutoFixExactRef($g_hLV_WO,  0, $setWOIDs,       "Work Orders tab / WO ID")
+    $nFixed += _AutoFixExactRef($g_hLV_WO,  1, $setMatIDs,      "Work Orders tab / Item ID")
+    $nFixed += _AutoFixExactRef($g_hLV_WO,  2, $setRoutIDs,     "Work Orders tab / Routing ID")
+
+    $nFixed += _AutoFixExactRef($g_hLV_WOL, 0, $setWOIDs,       "WO Links tab / Predecessor WO", True)
+    $nFixed += _AutoFixExactRef($g_hLV_WOL, 1, $setRoutIDs,     "WO Links tab / Predecessor routing", True)
+    $nFixed += _AutoFixExactRef($g_hLV_WOL, 3, $setWOIDs,       "WO Links tab / Successor WO", True)
+    $nFixed += _AutoFixExactRef($g_hLV_WOL, 4, $setRoutIDs,     "WO Links tab / Successor routing", True)
+
+    $nFixed += _AutoFixExactRef($g_hLV_SR,  0, $setOpeIDs,      "Secondary Resources tab / Operation ID")
+    $nFixed += _AutoFixExactRef($g_hLV_SR,  1, $setCTIDs,       "Secondary Resources tab / WC ID")
+    $nFixed += _AutoFixMachineExactRef($g_hLV_SR, 2, $setMachIDs, "Secondary Resources tab / Machine ID")
+    $nFixed += _AutoFixExactRef($g_hLV_SR,  4, $setAnyCalIDs,   "Secondary Resources tab / Capacity calendar ID", True)
+
+    $nFixed += _AutoFixExactRef($g_hLV_Stk, 0, $setMatIDs,      "Inventory Movements tab / Item ID")
+    $nFixed += _AutoFixExactRef($g_hLV_Stk, 1, $setRoutIDs,     "Inventory Movements tab / Routing ID", True)
+
+    ; Safe contextual auto-fixes (only when the lookup resolves to a single possible value)
+    $nFixed += _AutoFixMachineByWC($g_hLV_Ops, 2, 3, "Operations tab / Machine ID")
+    $nFixed += _AutoFixMachineByWC($g_hLV_SR,  1, 2, "Secondary Resources tab / Machine ID")
+
+    $nFixed += _AutoFixRoutingByItemVersion($g_hLV_BOM, 0, 1, 3, "BOM tab / Routing ID")
+    $nFixed += _AutoFixRoutingByItemVersion($g_hLV_WO,  1, 3, 2, "Work Orders tab / Routing ID")
+    $nFixed += _AutoFixRoutingByItemVersion($g_hLV_Stk, 0, 2, 1, "Inventory Movements tab / Routing ID")
+
+    $nFixed += _AutoFixRoutingByWO($g_hLV_WOL, 0, 1, "WO Links tab / Predecessor routing")
+    $nFixed += _AutoFixRoutingByWO($g_hLV_WOL, 3, 4, "WO Links tab / Successor routing")
+
+    If $nFixed = 0 Then
+        _Log("=== Integrity Auto-Fix finished — no automatic change was applied ===")
+    Else
+        _Log("=== Integrity Auto-Fix finished — " & $nFixed & " field(s) updated ===")
+    EndIf
+    Return $nFixed
+EndFunc
+
+Func _AutoFixExactRef($hLV, $iCol, $sSet, $sDesc, $bAllowEmpty = False)
+    Local $nFixed = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        Local $sRaw = _GUICtrlListView_GetItemText($hLV, $i, $iCol)
+        Local $sVal = StringStripWS($sRaw, 3)
+        If $sVal = "" Then
+            If $bAllowEmpty Then ContinueLoop
+            ContinueLoop
+        EndIf
+        If StringInStr($sSet, ";" & $sVal & ";") Then ContinueLoop
+
+        Local $sCanonical = _LookupCanonicalInSet($sSet, $sVal)
+        If $sCanonical = "" Then ContinueLoop
+
+        _GUICtrlListView_SetItemText($hLV, $i, $sCanonical, $iCol)
+        $nFixed += 1
+        _Log("AUTO-FIX: " & $sDesc & " - row " & ($i + 1) & ": '" & $sRaw & "' -> '" & $sCanonical & "'")
+    Next
+    Return $nFixed
+EndFunc
+
+Func _AutoFixMachineCalendarRef($hLV, $iCTTypeCol, $iCalCol, $sSet, $sDesc, $bAllowEmpty = False)
+    Local $nFixed = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        Local $sCTType = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iCTTypeCol), 3)
+        If _IsMachineCalendarOptional($sCTType) Then ContinueLoop
+
+        Local $sRaw = _GUICtrlListView_GetItemText($hLV, $i, $iCalCol)
+        Local $sVal = StringStripWS($sRaw, 3)
+        If $sVal = "" Then
+            If $bAllowEmpty Then ContinueLoop
+            ContinueLoop
+        EndIf
+        If StringInStr($sSet, ";" & $sVal & ";") Then ContinueLoop
+
+        Local $sCanonical = _LookupCanonicalInSet($sSet, $sVal)
+        If $sCanonical = "" Then ContinueLoop
+
+        _GUICtrlListView_SetItemText($hLV, $i, $sCanonical, $iCalCol)
+        $nFixed += 1
+        _Log("AUTO-FIX: " & $sDesc & " - row " & ($i + 1) & ": '" & $sRaw & "' -> '" & $sCanonical & "'")
+    Next
+    Return $nFixed
+EndFunc
+
+
+Func _AutoFixMachineExactRef($hLV, $iCol, $sSet, $sDesc, $bAllowEmpty = False)
+    Local $nFixed = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        Local $sRaw = _GUICtrlListView_GetItemText($hLV, $i, $iCol)
+        Local $sVal = StringStripWS($sRaw, 3)
+        If _IsStandByMachine($sVal) Then ContinueLoop
+        If $sVal = "" Then
+            If $bAllowEmpty Then ContinueLoop
+            ContinueLoop
+        EndIf
+        If StringInStr($sSet, ";" & $sVal & ";") Then ContinueLoop
+
+        Local $sCanonical = _LookupCanonicalInSet($sSet, $sVal)
+        If $sCanonical = "" Then ContinueLoop
+
+        _GUICtrlListView_SetItemText($hLV, $i, $sCanonical, $iCol)
+        $nFixed += 1
+        _Log("AUTO-FIX: " & $sDesc & " - row " & ($i + 1) & ": '" & $sRaw & "' -> '" & $sCanonical & "'")
+    Next
+    Return $nFixed
+EndFunc
+
+
+Func _AutoFixItemRoutingRef($hLV, $iTypeCol, $iRoutingCol, $sSet, $sDesc, $bAllowEmpty = False)
+    Local $nFixed = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+
+    For $i = 0 To $nRows - 1
+        Local $sType = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iTypeCol), 3)
+        If _IsRawMaterialType($sType) Then ContinueLoop
+
+        Local $sRaw = _GUICtrlListView_GetItemText($hLV, $i, $iRoutingCol)
+        Local $sVal = StringStripWS($sRaw, 3)
+        If $sVal = "" Then
+            If $bAllowEmpty Then ContinueLoop
+            ContinueLoop
+        EndIf
+        If StringInStr($sSet, ";" & $sVal & ";") Then ContinueLoop
+
+        Local $sCanonical = _LookupCanonicalInSet($sSet, $sVal)
+        If $sCanonical = "" Then ContinueLoop
+
+        _GUICtrlListView_SetItemText($hLV, $i, $sCanonical, $iRoutingCol)
+        $nFixed += 1
+        _Log("AUTO-FIX: " & $sDesc & " - row " & ($i + 1) & ": '" & $sRaw & "' -> '" & $sCanonical & "'")
+    Next
+    Return $nFixed
+EndFunc
+
+Func _LookupCanonicalInSet($sSet, $sValue)
+    Local $sNeedle = StringLower(StringStripWS($sValue, 3))
+    If $sNeedle = "" Then Return ""
+
+    Local $aItems = StringSplit($sSet, ";", 1)
+    Local $sMatch = ""
+    Local $nMatches = 0
+
+    For $i = 1 To $aItems[0]
+        Local $sItem = $aItems[$i]
+        If $sItem = "" Then ContinueLoop
+        If StringLower(StringStripWS($sItem, 3)) = $sNeedle Then
+            $nMatches += 1
+            $sMatch = $sItem
+            If $nMatches > 1 Then Return ""
+        EndIf
+    Next
+    Return $sMatch
+EndFunc
+
+Func _AutoFixMachineByWC($hLV, $iWCCol, $iMachineCol, $sDesc)
+    Local $nFixed = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    Local $setMachIDs = _LVColSet($g_hLV_Mach, 7)
+
+    For $i = 0 To $nRows - 1
+        Local $sWC = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iWCCol), 3)
+        Local $sMachRaw = _GUICtrlListView_GetItemText($hLV, $i, $iMachineCol)
+        Local $sMach = StringStripWS($sMachRaw, 3)
+        If $sWC = "" Then ContinueLoop
+        If _IsStandByMachine($sMach) Then ContinueLoop
+        If $sMach <> "" And StringInStr($setMachIDs, ";" & $sMach & ";") Then ContinueLoop
+
+        Local $sResolved = _LookupUniqueMachineByWC($sWC)
+        If $sResolved = "" Then ContinueLoop
+
+        _GUICtrlListView_SetItemText($hLV, $i, $sResolved, $iMachineCol)
+        $nFixed += 1
+        _Log("AUTO-FIX: " & $sDesc & " - row " & ($i + 1) & ": '" & $sMachRaw & "' -> '" & $sResolved & "' (derived from WC '" & $sWC & "')")
+    Next
+    Return $nFixed
+EndFunc
+
+Func _LookupUniqueMachineByWC($sWC)
+    Local $sWCNorm = StringLower(StringStripWS($sWC, 3))
+    If $sWCNorm = "" Then Return ""
+
+    Local $sFound = ""
+    Local $sSeen = ";"
+    Local $nUnique = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Mach)
+
+    For $i = 0 To $nRows - 1
+        Local $sRowWC = StringLower(StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mach, $i, 2), 3))
+        If $sRowWC <> $sWCNorm Then ContinueLoop
+
+        Local $sMachine = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mach, $i, 7), 3)
+        If $sMachine = "" Then ContinueLoop
+        If StringInStr($sSeen, ";" & $sMachine & ";") Then ContinueLoop
+
+        $sSeen &= $sMachine & ";"
+        $nUnique += 1
+        $sFound = $sMachine
+        If $nUnique > 1 Then Return ""
+    Next
+    Return $sFound
+EndFunc
+
+Func _AutoFixRoutingByItemVersion($hLV, $iItemCol, $iVerCol, $iRoutingCol, $sDesc)
+    Local $nFixed = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    Local $setRoutIDs = _LVColSet($g_hLV_Rout, 0)
+
+    For $i = 0 To $nRows - 1
+        Local $sItem = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iItemCol), 3)
+        Local $sVer = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iVerCol), 3)
+        Local $sRoutingRaw = _GUICtrlListView_GetItemText($hLV, $i, $iRoutingCol)
+        Local $sRouting = StringStripWS($sRoutingRaw, 3)
+
+        If $sItem = "" Or $sVer = "" Then ContinueLoop
+        If $sRouting <> "" And StringInStr($setRoutIDs, ";" & $sRouting & ";") Then ContinueLoop
+
+        Local $sResolved = _LookupUniqueRoutingByItemVersion($sItem, $sVer)
+        If $sResolved = "" Then ContinueLoop
+
+        _GUICtrlListView_SetItemText($hLV, $i, $sResolved, $iRoutingCol)
+        $nFixed += 1
+        _Log("AUTO-FIX: " & $sDesc & " - row " & ($i + 1) & ": '" & $sRoutingRaw & "' -> '" & $sResolved & "' (derived from item '" & $sItem & "' / version '" & $sVer & "')")
+    Next
+    Return $nFixed
+EndFunc
+
+Func _LookupUniqueRoutingByItemVersion($sItem, $sVer)
+    Local $sItemNorm = StringLower(StringStripWS($sItem, 3))
+    Local $sVerNorm = StringLower(StringStripWS($sVer, 3))
+    If $sItemNorm = "" Or $sVerNorm = "" Then Return ""
+
+    Local $sFound = ""
+    Local $sSeen = ";"
+    Local $nUnique = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Mat)
+
+    For $i = 0 To $nRows - 1
+        Local $sRowItem = StringLower(StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 0), 3))
+        Local $sRowVer = StringLower(StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 3), 3))
+        If $sRowItem <> $sItemNorm Or $sRowVer <> $sVerNorm Then ContinueLoop
+
+        Local $sType = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 2), 3)
+        If _IsRawMaterialType($sType) Then ContinueLoop
+
+        Local $sRouting = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 4), 3)
+        If $sRouting = "" Then ContinueLoop
+        If StringInStr($sSeen, ";" & $sRouting & ";") Then ContinueLoop
+
+        $sSeen &= $sRouting & ";"
+        $nUnique += 1
+        $sFound = $sRouting
+        If $nUnique > 1 Then Return ""
+    Next
+    Return $sFound
+EndFunc
+
+Func _AutoFixRoutingByWO($hLV, $iWOCol, $iRoutingCol, $sDesc)
+    Local $nFixed = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    Local $setRoutIDs = _LVColSet($g_hLV_Rout, 0)
+
+    For $i = 0 To $nRows - 1
+        Local $sWO = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iWOCol), 3)
+        Local $sRoutingRaw = _GUICtrlListView_GetItemText($hLV, $i, $iRoutingCol)
+        Local $sRouting = StringStripWS($sRoutingRaw, 3)
+
+        If $sWO = "" Then ContinueLoop
+        If $sRouting <> "" And StringInStr($setRoutIDs, ";" & $sRouting & ";") Then ContinueLoop
+
+        Local $sResolved = _LookupUniqueRoutingByWO($sWO)
+        If $sResolved = "" Then ContinueLoop
+
+        _GUICtrlListView_SetItemText($hLV, $i, $sResolved, $iRoutingCol)
+        $nFixed += 1
+        _Log("AUTO-FIX: " & $sDesc & " - row " & ($i + 1) & ": '" & $sRoutingRaw & "' -> '" & $sResolved & "' (derived from WO '" & $sWO & "')")
+    Next
+    Return $nFixed
+EndFunc
+
+Func _LookupUniqueRoutingByWO($sWO)
+    Local $sWONorm = StringLower(StringStripWS($sWO, 3))
+    If $sWONorm = "" Then Return ""
+
+    Local $sFound = ""
+    Local $sSeen = ";"
+    Local $nUnique = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_WO)
+
+    For $i = 0 To $nRows - 1
+        Local $sRowWO = StringLower(StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 0), 3))
+        If $sRowWO <> $sWONorm Then ContinueLoop
+
+        Local $sRouting = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 2), 3)
+        If $sRouting = "" Then ContinueLoop
+        If StringInStr($sSeen, ";" & $sRouting & ";") Then ContinueLoop
+
+        $sSeen &= $sRouting & ";"
+        $nUnique += 1
+        $sFound = $sRouting
+        If $nUnique > 1 Then Return ""
+    Next
+    Return $sFound
+EndFunc
+
+Func _ValidateCalendarFormats()
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Cal)
+    For $i = 0 To $nRows - 1
+        Local $sDiaI  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Cal, $i, 2), 3)
+        Local $sHoraI = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Cal, $i, 3), 3)
+        Local $sDiaF  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Cal, $i, 4), 3)
+        Local $sHoraF = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Cal, $i, 5), 3)
+
+        If Number($sDiaI) < 1 Or Number($sDiaI) > 7 Then
+            $nIssues += 1
+            _IntegrityIssue("Calendars tab - row " & ($i + 1) & ": start day '" & $sDiaI & "' should be between 1 and 7.")
+        EndIf
+        If Number($sDiaF) < 1 Or Number($sDiaF) > 7 Then
+            $nIssues += 1
+            _IntegrityIssue("Calendars tab - row " & ($i + 1) & ": end day '" & $sDiaF & "' should be between 1 and 7.")
+        EndIf
+        If _NormalizeTimeText($sHoraI) = "" Then
+            $nIssues += 1
+            _IntegrityIssue("Calendars tab - row " & ($i + 1) & ": start time '" & $sHoraI & "' is not valid.")
+        EndIf
+        If _NormalizeTimeText($sHoraF) = "" Then
+            $nIssues += 1
+            _IntegrityIssue("Calendars tab - row " & ($i + 1) & ": end time '" & $sHoraF & "' is not valid.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _ValidateCapacityFormats()
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Cap)
+    For $i = 0 To $nRows - 1
+        Local $sDiaI  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Cap, $i, 1), 3)
+        Local $sHoraI = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Cap, $i, 2), 3)
+        Local $sDiaF  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Cap, $i, 3), 3)
+        Local $sHoraF = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Cap, $i, 4), 3)
+        Local $sRes   = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Cap, $i, 5), 3)
+
+        If Number($sDiaI) < 1 Or Number($sDiaI) > 7 Then
+            $nIssues += 1
+            _IntegrityIssue("Capacity tab - row " & ($i + 1) & ": start day '" & $sDiaI & "' should be between 1 and 7.")
+        EndIf
+        If Number($sDiaF) < 1 Or Number($sDiaF) > 7 Then
+            $nIssues += 1
+            _IntegrityIssue("Capacity tab - row " & ($i + 1) & ": end day '" & $sDiaF & "' should be between 1 and 7.")
+        EndIf
+        If _NormalizeTimeText($sHoraI) = "" Then
+            $nIssues += 1
+            _IntegrityIssue("Capacity tab - row " & ($i + 1) & ": start time '" & $sHoraI & "' is not valid.")
+        EndIf
+        If _NormalizeTimeText($sHoraF) = "" Then
+            $nIssues += 1
+            _IntegrityIssue("Capacity tab - row " & ($i + 1) & ": end time '" & $sHoraF & "' is not valid.")
+        EndIf
+        If $sRes <> "" And Not StringRegExp($sRes, "^-?\d+([.,]\d+)?$") Then
+            $nIssues += 1
+            _IntegrityIssue("Capacity tab - row " & ($i + 1) & ": #Resources '" & $sRes & "' is not numeric.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _ValidateWODates()
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_WO)
+    For $i = 0 To $nRows - 1
+        For $c = 5 To 6
+            Local $sVal = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, $c), 3)
+            If $sVal = "" Then ContinueLoop
+            If Not StringRegExp($sVal, "^\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}$") Then
+                $nIssues += 1
+                _IntegrityIssue("Work Orders tab - row " & ($i + 1) & ": date '" & $sVal & "' should be dd/mm/yyyy hh:mm.")
+            EndIf
+        Next
+    Next
+    Return $nIssues
+EndFunc
+
+Func _ValidateStockDates()
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Stk)
+    For $i = 0 To $nRows - 1
+        Local $sVal = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Stk, $i, 3), 3)
+        If $sVal = "" Then ContinueLoop
+        If Not StringRegExp($sVal, "^\d{2}/\d{2}/\d{4}$") Then
+            $nIssues += 1
+            _IntegrityIssue("Inventory Movements tab - row " & ($i + 1) & ": move date '" & $sVal & "' should be dd/mm/yyyy.")
         EndIf
     Next
     Return $nIssues
@@ -1940,36 +3304,308 @@ EndFunc
 ; IMPORTAR / EXPORTAR EXCEL
 ;=============================================================================
 Func _ImportExcel()
-    Local $sFile = FileOpenDialog("Select Excel/CSV file", @WorkingDir, "Excel/CSV (*.xlsx;*.xlsm;*.csv)|Todos (*.*)")
-    If $sFile = "" Then Return
+    Local $sFolder = FileSelectFolder("Select folder containing CSV files (one per tab)", "")
+    If @error Or $sFolder = "" Then Return
 
-    If StringRight($sFile, 4) = ".csv" Then
-        _Log("Importando CSV: " & $sFile)
-        MsgBox(64, "Import", "CSV import not implemented yet. File: " & $sFile & @CRLF & "Select the corresponding target tab.")
-    Else
-        MsgBox(64, "Import Excel", "Para importar do Excel Toolbox original:" & @CRLF & @CRLF & _
-            "1. Open the file: " & $sFile & @CRLF & _
-            "2. Export each SV_ tab as CSV" & @CRLF & _
-            "3. Use 'Import CSV' in each data tab if needed" & @CRLF & @CRLF & _
-            "(Suporte nativo a .xlsm requer Microsoft Excel instalado)")
-    EndIf
+    Local $iAns = MsgBox(4 + 32, "Import CSVs", _
+        "This will look for these files in the selected folder and import each one into its tab:" & @CRLF & @CRLF & _
+        "calendars.csv, machines.csv, operations.csv, routings.csv," & @CRLF & _
+        "items.csv, bom.csv, workorders.csv, wo_links.csv," & @CRLF & _
+        "secondary_resources.csv, capacity.csv, stock.csv" & @CRLF & @CRLF & _
+        "Existing rows in those tabs will be REPLACED. Continue?")
+    If $iAns <> 6 Then Return
+
+    Local $aMap[11][2] = [ _
+        [$g_hLV_Cal,  "calendars.csv"], _
+        [$g_hLV_Mach, "machines.csv"], _
+        [$g_hLV_Ops,  "operations.csv"], _
+        [$g_hLV_Rout, "routings.csv"], _
+        [$g_hLV_Mat,  "items.csv"], _
+        [$g_hLV_BOM,  "bom.csv"], _
+        [$g_hLV_WO,   "workorders.csv"], _
+        [$g_hLV_WOL,  "wo_links.csv"], _
+        [$g_hLV_SR,   "secondary_resources.csv"], _
+        [$g_hLV_Cap,  "capacity.csv"], _
+        [$g_hLV_Stk,  "stock.csv"] _
+    ]
+
+    Local $nTotalRows = 0, $nFiles = 0, $sMissing = ""
+    For $i = 0 To 10
+        Local $sPath = $sFolder & "\" & $aMap[$i][1]
+        If FileExists($sPath) Then
+            Local $n = _LV_ImportCSVFromFile($aMap[$i][0], $sPath, True)
+            If $n >= 0 Then
+                $nTotalRows += $n
+                $nFiles += 1
+            EndIf
+        Else
+            $sMissing &= $aMap[$i][1] & @CRLF
+        EndIf
+    Next
+
+    _Log("Bulk CSV import finished: " & $nFiles & " files, " & $nTotalRows & " rows")
+    Local $sMsg = "Imported " & $nTotalRows & " rows from " & $nFiles & " file(s)."
+    If $sMissing <> "" Then $sMsg &= @CRLF & @CRLF & "Files not found (skipped):" & @CRLF & $sMissing
+    MsgBox(64, "Import CSVs", $sMsg)
 EndFunc
 
 Func _ExportExcel()
-    Local $sSaveFile = FileSaveDialog("Export data", @WorkingDir, "CSV (*.csv)|Todos (*.*)", 16, "ortems_demo_export.csv")
-    If $sSaveFile = "" Then Return
+    Local $sFolder = FileSelectFolder("Select destination folder for CSV files", "")
+    If @error Or $sFolder = "" Then Return
 
-    Local $sCSV = ""
-    ; Exporta calendarios
-    $sCSV &= "TIPO;ID;NOME;DIA_INICIO;HORA_INICIO;DIA_FIM;HORA_FIM" & @CRLF
-    Local $n = _GUICtrlListView_GetItemCount($g_hLV_Cal)
-    For $i = 0 To $n - 1
-        $sCSV &= "CAL;" & _GUICtrlListView_GetItemText($g_hLV_Cal, $i, 0) & ";" & _GUICtrlListView_GetItemText($g_hLV_Cal, $i, 1) & ";" & _GUICtrlListView_GetItemText($g_hLV_Cal, $i, 2) & ";" & _GUICtrlListView_GetItemText($g_hLV_Cal, $i, 3) & ";" & _GUICtrlListView_GetItemText($g_hLV_Cal, $i, 4) & ";" & _GUICtrlListView_GetItemText($g_hLV_Cal, $i, 5) & @CRLF
+    Local $aMap[11][2] = [ _
+        [$g_hLV_Cal,  "calendars.csv"], _
+        [$g_hLV_Mach, "machines.csv"], _
+        [$g_hLV_Ops,  "operations.csv"], _
+        [$g_hLV_Rout, "routings.csv"], _
+        [$g_hLV_Mat,  "items.csv"], _
+        [$g_hLV_BOM,  "bom.csv"], _
+        [$g_hLV_WO,   "workorders.csv"], _
+        [$g_hLV_WOL,  "wo_links.csv"], _
+        [$g_hLV_SR,   "secondary_resources.csv"], _
+        [$g_hLV_Cap,  "capacity.csv"], _
+        [$g_hLV_Stk,  "stock.csv"] _
+    ]
+
+    Local $nTotalRows = 0, $nFiles = 0
+    For $i = 0 To 10
+        Local $sPath = $sFolder & "\" & $aMap[$i][1]
+        Local $n = _LV_ExportCSVToFile($aMap[$i][0], $sPath)
+        If $n >= 0 Then
+            $nTotalRows += $n
+            $nFiles += 1
+        EndIf
     Next
 
-    FileWrite($sSaveFile, $sCSV)
-    _Log("Data exported to: " & $sSaveFile)
-    MsgBox(64, "Export", "Data exported successfully to:" & @CRLF & $sSaveFile)
+    _Log("Bulk CSV export finished: " & $nFiles & " files, " & $nTotalRows & " rows -> " & $sFolder)
+    MsgBox(64, "Export", "Exported " & $nFiles & " CSV file(s) with " & $nTotalRows & " total rows to:" & @CRLF & $sFolder)
+EndFunc
+
+;=============================================================================
+; GENERIC CSV IMPORT / EXPORT FOR A LISTVIEW
+;=============================================================================
+Func _CSVEscape($s)
+    If StringInStr($s, ";") Or StringInStr($s, '"') Or StringInStr($s, @CR) Or StringInStr($s, @LF) Then
+        $s = StringReplace($s, '"', '""')
+        Return '"' & $s & '"'
+    EndIf
+    Return $s
+EndFunc
+
+Func _CSVSplit($sLine, $nCols)
+    Local $aResult[$nCols]
+    For $k = 0 To $nCols - 1
+        $aResult[$k] = ""
+    Next
+
+    Local $iCol = 0
+    Local $sCur = ""
+    Local $bInQuote = False
+    Local $iLen = StringLen($sLine)
+    Local $i = 1
+    While $i <= $iLen
+        Local $ch = StringMid($sLine, $i, 1)
+        If $bInQuote Then
+            If $ch = '"' Then
+                If $i < $iLen And StringMid($sLine, $i + 1, 1) = '"' Then
+                    $sCur &= '"'
+                    $i += 1
+                Else
+                    $bInQuote = False
+                EndIf
+            Else
+                $sCur &= $ch
+            EndIf
+        Else
+            If $ch = '"' Then
+                $bInQuote = True
+            ElseIf $ch = ';' Then
+                If $iCol < $nCols Then $aResult[$iCol] = $sCur
+                $iCol += 1
+                $sCur = ""
+            Else
+                $sCur &= $ch
+            EndIf
+        EndIf
+        $i += 1
+    WEnd
+    If $iCol < $nCols Then $aResult[$iCol] = $sCur
+    Return $aResult
+EndFunc
+
+; Export a ListView to a CSV file. Returns row count (>=0) or -1 on error.
+Func _LV_ExportCSVToFile($hLV, $sFile)
+    Local $nCols = _GUICtrlListView_GetColumnCount($hLV)
+    Local $nDataCols = $nCols - 1
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+
+    Local $sCSV = ""
+    ; Header
+    For $c = 0 To $nDataCols - 1
+        If $c > 0 Then $sCSV &= ";"
+        Local $aCol = _GUICtrlListView_GetColumn($hLV, $c)
+        Local $sHdr = ""
+        If IsArray($aCol) And UBound($aCol) > 5 Then $sHdr = $aCol[5]
+        $sCSV &= _CSVEscape($sHdr)
+    Next
+    $sCSV &= @CRLF
+
+    ; Rows
+    For $i = 0 To $nRows - 1
+        For $c = 0 To $nDataCols - 1
+            If $c > 0 Then $sCSV &= ";"
+            $sCSV &= _CSVEscape(_GUICtrlListView_GetItemText($hLV, $i, $c))
+        Next
+        $sCSV &= @CRLF
+    Next
+
+    Local $hFile = FileOpen($sFile, 2 + 8)  ; erase + create
+    If $hFile = -1 Then
+        _Log("Export CSV failed (cannot open): " & $sFile)
+        Return -1
+    EndIf
+    FileWrite($hFile, $sCSV)
+    FileClose($hFile)
+    Return $nRows
+EndFunc
+
+; Import a CSV file into a ListView. If $bReplace=True, clears existing rows first.
+; Returns row count imported, or -1 on error.
+Func _LV_ImportCSVFromFile($hLV, $sFile, $bReplace)
+    If Not FileExists($sFile) Then Return -1
+    Local $hFile = FileOpen($sFile, 0)
+    If $hFile = -1 Then Return -1
+
+    Local $nCols = _GUICtrlListView_GetColumnCount($hLV)
+    Local $nDataCols = $nCols - 1
+    If $bReplace Then _GUICtrlListView_DeleteAllItems($hLV)
+
+    Local $nImported = 0
+    Local $bFirst = True
+    While 1
+        Local $sLine = FileReadLine($hFile)
+        If @error Then ExitLoop
+        If StringStripWS($sLine, 3) = "" Then ContinueLoop
+        If $bFirst Then
+            $bFirst = False
+            ContinueLoop  ; skip header
+        EndIf
+        Local $aFields = _CSVSplit($sLine, $nDataCols)
+        Local $sItem = ""
+        For $c = 0 To $nDataCols - 1
+            If $c > 0 Then $sItem &= "|"
+            ; Replace any pipe in field to avoid breaking ListView separator
+            $sItem &= StringReplace($aFields[$c], "|", "/")
+        Next
+        _LV_AppendDataRow($hLV, $sItem)
+        $nImported += 1
+    WEnd
+    FileClose($hFile)
+    _Log("Imported " & $nImported & " rows from " & $sFile)
+    Return $nImported
+EndFunc
+
+; Interactive single-tab CSV export: asks for filename and calls export helper.
+Func _LV_ExportCSVInteractive($hLV, $sDefaultName)
+    Local $sFile = FileSaveDialog("Export " & $sDefaultName & " to CSV", @WorkingDir, _
+        "CSV (*.csv)", 16, $sDefaultName & ".csv")
+    If @error Or $sFile = "" Then Return
+    If StringRight($sFile, 4) <> ".csv" Then $sFile &= ".csv"
+    Local $n = _LV_ExportCSVToFile($hLV, $sFile)
+    If $n < 0 Then
+        MsgBox(16, "Export CSV", "Failed to write file: " & $sFile)
+    Else
+        MsgBox(64, "Export CSV", "Exported " & $n & " rows to:" & @CRLF & $sFile)
+    EndIf
+EndFunc
+
+; Interactive single-tab CSV import: asks for file, asks replace/append, calls import helper.
+Func _LV_ImportCSVInteractive($hLV, $sName)
+    Local $sFile = FileOpenDialog("Import CSV for " & $sName, @WorkingDir, "CSV (*.csv)|All (*.*)", 1)
+    If @error Or $sFile = "" Then Return
+    Local $iAns = MsgBox(4 + 32 + 3, "Import CSV", _
+        "Replace existing rows?" & @CRLF & @CRLF & _
+        "Yes = replace all rows in this tab" & @CRLF & _
+        "No  = append to existing rows" & @CRLF & _
+        "Cancel = abort")
+    If $iAns = 2 Then Return  ; cancel
+    Local $bReplace = ($iAns = 6)
+    Local $n = _LV_ImportCSVFromFile($hLV, $sFile, $bReplace)
+    If $n < 0 Then
+        MsgBox(16, "Import CSV", "Failed to read file: " & $sFile)
+    Else
+        MsgBox(64, "Import CSV", "Imported " & $n & " rows from:" & @CRLF & $sFile)
+    EndIf
+EndFunc
+
+;=============================================================================
+; PER-TAB CSV IMPORT / EXPORT WRAPPERS
+;=============================================================================
+Func _Cal_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_Cal,  "calendars")
+EndFunc
+Func _Cal_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_Cal,  "calendars")
+EndFunc
+Func _Mach_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_Mach, "machines")
+EndFunc
+Func _Mach_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_Mach, "machines")
+EndFunc
+Func _Ops_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_Ops,  "operations")
+EndFunc
+Func _Ops_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_Ops,  "operations")
+EndFunc
+Func _Rout_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_Rout, "routings")
+EndFunc
+Func _Rout_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_Rout, "routings")
+EndFunc
+Func _Mat_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_Mat,  "items")
+EndFunc
+Func _Mat_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_Mat,  "items")
+EndFunc
+Func _BOM_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_BOM,  "bom")
+EndFunc
+Func _BOM_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_BOM,  "bom")
+EndFunc
+Func _WO_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_WO,   "workorders")
+EndFunc
+Func _WO_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_WO,   "workorders")
+EndFunc
+Func _WOL_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_WOL,  "wo_links")
+EndFunc
+Func _WOL_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_WOL,  "wo_links")
+EndFunc
+Func _SR_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_SR,   "secondary_resources")
+EndFunc
+Func _SR_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_SR,   "secondary_resources")
+EndFunc
+Func _Cap_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_Cap,  "capacity")
+EndFunc
+Func _Cap_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_Cap,  "capacity")
+EndFunc
+Func _Stk_ImpCSV()
+    _LV_ImportCSVInteractive($g_hLV_Stk,  "stock")
+EndFunc
+Func _Stk_ExpCSV()
+    _LV_ExportCSVInteractive($g_hLV_Stk,  "stock")
 EndFunc
 
 
@@ -2030,10 +3666,11 @@ Func _DBQuery($oConn, $sSQL)
     Return $oRS
 EndFunc
 
-; Format integer time (e.g. 800) back to "08:00"
+; Format DB time back to "HH:MM".
+; Supports text values already stored as HH:MM, numeric hour values (6 => 06:00),
+; numeric HHMM values (600 => 06:00), and Excel-style decimals.
 Func _IntToTime($nVal)
-    Local $s = StringFormat("%04d", Int($nVal))
-    Return StringLeft($s, 2) & ":" & StringRight($s, 2)
+    Return _NormalizeTimeText($nVal)
 EndFunc
 
 ;------------------------------------------------------------------------------
@@ -2056,11 +3693,12 @@ Func _DB_LoadCalendars($oConn)
         Local $sHoraI = _IntToTime($oRS.Fields("DEB_PERIO").Value)
         Local $sDiaF  = $oRS.Fields("NOJOUR_FIN").Value
         Local $sHoraF = _IntToTime($oRS.Fields("FIN_PERIO").Value)
-        GUICtrlCreateListViewItem($sID & "|" & $sNome & "|" & $sDiaI & "|" & $sHoraI & "|" & $sDiaF & "|" & $sHoraF, $g_hLV_Cal)
+        _LV_AppendDataRow($g_hLV_Cal, $sID & "|" & $sNome & "|" & $sDiaI & "|" & $sHoraI & "|" & $sDiaF & "|" & $sHoraF)
         $nRows += 1
         $oRS.MoveNext()
     WEnd
     $oRS.Close()
+    _LV_Renumber($g_hLV_Cal)
     _Log("Calendars loaded: " & $nRows & " rows")
     Return 1
 EndFunc
@@ -2087,7 +3725,7 @@ Func _DB_LoadMachines($oConn)
 
     Local $nRows = 0
     While Not $oRS.EOF
-        GUICtrlCreateListViewItem( _
+        _LV_AppendDataRow($g_hLV_Mach, _
             $oRS.Fields("NOZONE").Value & "|" & _
             $oRS.Fields("LIBZONE").Value & "|" & _
             $oRS.Fields("ILOT").Value & "|" & _
@@ -2098,11 +3736,12 @@ Func _DB_LoadMachines($oConn)
             $oRS.Fields("MACHINE").Value & "|" & _
             $oRS.Fields("LIBMACH").Value & "|" & _
             $oRS.Fields("MACH_MODEMACH").Value & "|" & _
-            $oRS.Fields("NOCALHEBD").Value & "|", $g_hLV_Mach)
+            $oRS.Fields("NOCALHEBD").Value & "|")
         $nRows += 1
         $oRS.MoveNext()
     WEnd
     $oRS.Close()
+    _LV_Renumber($g_hLV_Mach)
     _Log("Machines loaded: " & $nRows & " rows")
     Return 1
 EndFunc
@@ -2128,7 +3767,7 @@ Func _DB_LoadOperations($oConn)
 
     Local $nRows = 0
     While Not $oRS.EOF
-        GUICtrlCreateListViewItem( _
+        _LV_AppendDataRow($g_hLV_Ops, _
             $oRS.Fields("OPE").Value & "|" & _
             $oRS.Fields("LIBOP").Value & "|" & _
             $oRS.Fields("ILOT").Value & "|" & _
@@ -2138,11 +3777,12 @@ Func _DB_LoadOperations($oConn)
             $oRS.Fields("UNITE").Value & "|" & _
             $oRS.Fields("DURPREP").Value & "|" & _
             $oRS.Fields("THM").Value & "|" & _
-            $oRS.Fields("INTERUPT").Value, $g_hLV_Ops)
+            $oRS.Fields("INTERUPT").Value)
         $nRows += 1
         $oRS.MoveNext()
     WEnd
     $oRS.Close()
+    _LV_Renumber($g_hLV_Ops)
     _Log("Operations loaded: " & $nRows & " rows")
     Return 1
 EndFunc
@@ -2162,16 +3802,17 @@ Func _DB_LoadRoutings($oConn)
 
     Local $nRows = 0
     While Not $oRS.EOF
-        GUICtrlCreateListViewItem( _
+        _LV_AppendDataRow($g_hLV_Rout, _
             $oRS.Fields("NOMG").Value & "|" & _
             $oRS.Fields("LIBGAM").Value & "|" & _
             $oRS.Fields("NOPHASE").Value & "|" & _
             $oRS.Fields("OPE").Value & "|" & _
-            $oRS.Fields("LIBPHASE").Value, $g_hLV_Rout)
+            $oRS.Fields("LIBPHASE").Value)
         $nRows += 1
         $oRS.MoveNext()
     WEnd
     $oRS.Close()
+    _LV_Renumber($g_hLV_Rout)
     _Log("Routings loaded: " & $nRows & " rows")
     Return 1
 EndFunc
@@ -2195,17 +3836,18 @@ Func _DB_LoadMaterials($oConn)
 
     Local $nRows = 0
     While Not $oRS.EOF
-        GUICtrlCreateListViewItem( _
+        _LV_AppendDataRow($g_hLV_Mat, _
             $oRS.Fields("CODEARTIC").Value & "|" & _
             $oRS.Fields("LIBARTIC").Value & "|" & _
             $oRS.Fields("TYPEMATI").Value & "|" & _
             $oRS.Fields("VER_ART").Value & "|" & _
             $oRS.Fields("NOMG").Value & "|" & _
-            $oRS.Fields("QTE_STOCK").Value, $g_hLV_Mat)
+            $oRS.Fields("QTE_STOCK").Value)
         $nRows += 1
         $oRS.MoveNext()
     WEnd
     $oRS.Close()
+    _LV_Renumber($g_hLV_Mat)
     _Log("Materials loaded: " & $nRows & " rows")
     Return 1
 EndFunc
@@ -2230,18 +3872,19 @@ Func _DB_LoadBOM($oConn)
 
     Local $nRows = 0
     While Not $oRS.EOF
-        GUICtrlCreateListViewItem( _
+        _LV_AppendDataRow($g_hLV_BOM, _
             $oRS.Fields("B_V_CODEARTIC").Value & "|" & _
             $oRS.Fields("VER_ART").Value & "|" & _
             $oRS.Fields("CODEARTIC").Value & "|" & _
             $oRS.Fields("NOMG").Value & "|" & _
             $oRS.Fields("NOPHASE").Value & "|" & _
             $oRS.Fields("QTYREF").Value & "|" & _
-            $oRS.Fields("QTYNEC").Value, $g_hLV_BOM)
+            $oRS.Fields("QTYNEC").Value)
         $nRows += 1
         $oRS.MoveNext()
     WEnd
     $oRS.Close()
+    _LV_Renumber($g_hLV_BOM)
     _Log("BOM loaded: " & $nRows & " rows")
     Return 1
 EndFunc
@@ -2270,17 +3913,18 @@ Func _DB_LoadWO($oConn)
         Local $sDtF = $oRS.Fields("DT_F").Value
         If StringLen($sDtI) = 10 Then $sDtI &= " 00:00"
         If StringLen($sDtF) = 10 Then $sDtF &= " 23:59"
-        GUICtrlCreateListViewItem( _
+        _LV_AppendDataRow($g_hLV_WO, _
             $oRS.Fields("NOF").Value & "|" & _
             $oRS.Fields("CODEARTIC").Value & "|" & _
             $oRS.Fields("NOMG").Value & "|" & _
             $oRS.Fields("VER_ART").Value & "|" & _
             $oRS.Fields("QTE").Value & "|" & _
-            $sDtI & "|" & $sDtF, $g_hLV_WO)
+            $sDtI & "|" & $sDtF)
         $nRows += 1
         $oRS.MoveNext()
     WEnd
     $oRS.Close()
+    _LV_Renumber($g_hLV_WO)
     _Log("Work Orders loaded: " & $nRows & " rows")
     Return 1
 EndFunc
@@ -2302,18 +3946,19 @@ Func _DB_LoadWOLinks($oConn)
 
     Local $nRows = 0
     While Not $oRS.EOF
-        GUICtrlCreateListViewItem( _
+        _LV_AppendDataRow($g_hLV_WOL, _
             $oRS.Fields("B_O_NOF").Value & "|" & _
             $oRS.Fields("B_P_NOMG").Value & "|" & _
             $oRS.Fields("B_P_NOPHASE").Value & "|" & _
             $oRS.Fields("NOF").Value & "|" & _
             $oRS.Fields("NOMG").Value & "|" & _
             $oRS.Fields("NOPHASE").Value & "|" & _
-            $oRS.Fields("PROF_TYPEPREC").Value, $g_hLV_WOL)
+            $oRS.Fields("PROF_TYPEPREC").Value)
         $nRows += 1
         $oRS.MoveNext()
     WEnd
     $oRS.Close()
+    _LV_Renumber($g_hLV_WOL)
     _Log("WO Links loaded: " & $nRows & " rows")
     Return 1
 EndFunc

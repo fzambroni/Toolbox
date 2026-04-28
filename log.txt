@@ -1,72 +1,49 @@
 
-========== SESSION STARTED: 2026-04-02 16:18:23 ==========
-[2026-04-02 16:18:56] === Load from DB started ===
-[2026-04-02 16:18:56] Calendars loaded: 55 rows
-[2026-04-02 16:18:56] Machines loaded: 12 rows
-[2026-04-02 16:18:56] Operations loaded: 35 rows
-[2026-04-02 16:18:56] Routings loaded: 39 rows
-[2026-04-02 16:18:56] Materials loaded: 39 rows
-[2026-04-02 16:18:56] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-04-02 16:18:56] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-04-02 16:18:56] BOM loaded: 96 rows
-[2026-04-02 16:18:56] B_OF schema: column 'QTE' used for qty_order
-[2026-04-02 16:18:56] Work Orders loaded: 34 rows
-[2026-04-02 16:18:56] === Load from DB complete — 7 tab(s) populated ===
-[2026-04-02 16:21:02] === Load from DB started ===
-[2026-04-02 16:21:02] Calendars loaded: 55 rows
-[2026-04-02 16:21:02] Machines loaded: 12 rows
-[2026-04-02 16:21:02] Operations loaded: 35 rows
-[2026-04-02 16:21:02] Routings loaded: 39 rows
-[2026-04-02 16:21:02] Materials loaded: 39 rows
-[2026-04-02 16:21:03] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-04-02 16:21:03] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-04-02 16:21:03] BOM loaded: 96 rows
-[2026-04-02 16:21:03] B_OF schema: column 'QTE' used for qty_order
-[2026-04-02 16:21:03] Work Orders loaded: 34 rows
-[2026-04-02 16:21:03] === Load from DB complete — 7 tab(s) populated ===
-[2026-04-02 16:22:15] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-04-02 16:22:15] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-04-02 16:22:15] B_OF schema: column 'QTE' used for qty_order
-[2026-04-02 16:22:15] B_OF schema: column for mode_util not present in this version (optional)
-[2026-04-02 16:22:15] SQL generated successfully. 95879 caracteres.
+========== SESSION STARTED: 2026-04-22 12:58:58 ==========
 
-========== SESSION STARTED: 2026-04-02 16:23:12 ==========
-[2026-04-02 16:24:10] === Load from DB started ===
-[2026-04-02 16:24:10] Calendars loaded: 55 rows
-[2026-04-02 16:24:10] Machines loaded: 12 rows
-[2026-04-02 16:24:10] Operations loaded: 35 rows
-[2026-04-02 16:24:10] Routings loaded: 39 rows
-[2026-04-02 16:24:10] Materials loaded: 39 rows
-[2026-04-02 16:24:10] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-04-02 16:24:11] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-04-02 16:24:11] BOM loaded: 96 rows
-[2026-04-02 16:24:11] B_OF schema: column 'QTE' used for qty_order
-[2026-04-02 16:24:11] Work Orders loaded: 34 rows
-[2026-04-02 16:24:11] WO Links loaded: 0 rows
-[2026-04-02 16:24:11] === Load from DB complete — 8 tab(s) populated ===
-[2026-04-02 16:24:33] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-04-02 16:24:33] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-04-02 16:24:33] B_OF schema: column 'QTE' used for qty_order
-[2026-04-02 16:24:33] B_OF schema: column for mode_util not present in this version (optional)
-[2026-04-02 16:24:33] SQL generated successfully. 95879 caracteres.
-[2026-04-02 16:24:49] Data exported to: E:\GitHub\Toolbox\ortems_demo_export.csv
+========== SESSION STARTED: 2026-04-22 12:59:04 ==========
 
-========== SESSION STARTED: 2026-04-02 16:28:30 ==========
-[2026-04-02 16:30:46] === Load from DB started ===
-[2026-04-02 16:30:46] Calendars loaded: 55 rows
-[2026-04-02 16:30:46] Machines loaded: 12 rows
-[2026-04-02 16:30:46] Operations loaded: 35 rows
-[2026-04-02 16:30:46] Routings loaded: 39 rows
-[2026-04-02 16:30:46] Materials loaded: 39 rows
-[2026-04-02 16:30:46] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-04-02 16:30:46] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-04-02 16:30:46] BOM loaded: 96 rows
-[2026-04-02 16:30:46] B_OF schema: column 'QTE' used for qty_order
-[2026-04-02 16:30:46] Work Orders loaded: 34 rows
-[2026-04-02 16:30:46] WO Links loaded: 0 rows
-[2026-04-02 16:30:46] === Load from DB complete — 8 tab(s) populated ===
-[2026-04-02 16:31:16] B_NOME schema: column 'QTEREF' used for qty_base
-[2026-04-02 16:31:16] B_NOME schema: column 'QTENEC' used for qty_nec
-[2026-04-02 16:31:16] B_OF schema: column 'QTE' used for qty_order
-[2026-04-02 16:31:16] B_OF schema: column for mode_util not present in this version (optional)
-[2026-04-02 16:31:16] SQL generated successfully. 95879 caracteres.
+========== SESSION STARTED: 2026-04-22 13:00:25 ==========
+[2026-04-22 13:00:38] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-22 13:00:38] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-22 13:00:50] === Load from DB started ===
+[2026-04-22 13:00:50] Calendars loaded: 0 rows
+[2026-04-22 13:00:50] Machines loaded: 0 rows
+[2026-04-22 13:00:50] Operations loaded: 0 rows
+[2026-04-22 13:00:50] Routings loaded: 0 rows
+[2026-04-22 13:00:50] Materials loaded: 0 rows
+[2026-04-22 13:00:50] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-22 13:00:50] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-22 13:00:50] BOM loaded: 0 rows
+[2026-04-22 13:00:50] B_OF schema: column 'QTE' used for qty_order
+[2026-04-22 13:00:50] Work Orders loaded: 0 rows
+[2026-04-22 13:00:50] WO Links loaded: 0 rows
+[2026-04-22 13:00:50] === Load from DB complete — 8 tab(s) populated ===
+[2026-04-22 13:00:52] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-22 13:00:52] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-22 13:00:58] === Load from DB started ===
+[2026-04-22 13:00:58] Calendars loaded: 0 rows
+[2026-04-22 13:00:58] Machines loaded: 0 rows
+[2026-04-22 13:00:58] Operations loaded: 0 rows
+[2026-04-22 13:00:58] Routings loaded: 0 rows
+[2026-04-22 13:00:58] Materials loaded: 0 rows
+[2026-04-22 13:00:58] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-22 13:00:58] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-22 13:00:58] BOM loaded: 0 rows
+[2026-04-22 13:00:58] B_OF schema: column 'QTE' used for qty_order
+[2026-04-22 13:00:58] Work Orders loaded: 0 rows
+[2026-04-22 13:00:58] WO Links loaded: 0 rows
+[2026-04-22 13:00:58] === Load from DB complete — 8 tab(s) populated ===
+[2026-04-22 13:01:11] === Load from DB started ===
+[2026-04-22 13:01:11] Calendars loaded: 0 rows
+[2026-04-22 13:01:11] Machines loaded: 0 rows
+[2026-04-22 13:01:11] Operations loaded: 0 rows
+[2026-04-22 13:01:11] Routings loaded: 0 rows
+[2026-04-22 13:01:11] Materials loaded: 0 rows
+[2026-04-22 13:01:11] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-22 13:01:11] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-22 13:01:11] BOM loaded: 0 rows
+[2026-04-22 13:01:11] B_OF schema: column 'QTE' used for qty_order
+[2026-04-22 13:01:11] Work Orders loaded: 0 rows
+[2026-04-22 13:01:11] WO Links loaded: 0 rows
+[2026-04-22 13:01:11] === Load from DB complete — 8 tab(s) populated ===
