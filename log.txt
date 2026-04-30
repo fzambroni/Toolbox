@@ -47,3 +47,178 @@
 [2026-04-22 13:01:11] Work Orders loaded: 0 rows
 [2026-04-22 13:01:11] WO Links loaded: 0 rows
 [2026-04-22 13:01:11] === Load from DB complete — 8 tab(s) populated ===
+
+========== SESSION STARTED: 2026-04-29 10:47:08 ==========
+[2026-04-29 10:47:27] === Load from DB started ===
+[2026-04-29 10:47:27] Calendars loaded: 0 rows
+[2026-04-29 10:47:27] Machines loaded: 0 rows
+[2026-04-29 10:47:27] Operations loaded: 0 rows
+[2026-04-29 10:47:27] Routings loaded: 0 rows
+[2026-04-29 10:47:27] Materials loaded: 0 rows
+[2026-04-29 10:47:27] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-29 10:47:27] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-29 10:47:27] BOM loaded: 0 rows
+[2026-04-29 10:47:27] B_OF schema: column 'QTE' used for qty_order
+[2026-04-29 10:47:27] Work Orders loaded: 0 rows
+[2026-04-29 10:47:27] WO Links loaded: 0 rows
+[2026-04-29 10:47:27] === Load from DB complete — 8 tab(s) populated ===
+[2026-04-29 10:47:40] === Load from DB started ===
+[2026-04-29 10:47:40] Calendars loaded: 0 rows
+[2026-04-29 10:47:40] Machines loaded: 0 rows
+[2026-04-29 10:47:40] Operations loaded: 0 rows
+[2026-04-29 10:47:40] Routings loaded: 0 rows
+[2026-04-29 10:47:40] Materials loaded: 0 rows
+[2026-04-29 10:47:40] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-29 10:47:40] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-29 10:47:40] BOM loaded: 0 rows
+[2026-04-29 10:47:40] B_OF schema: column 'QTE' used for qty_order
+[2026-04-29 10:47:40] Work Orders loaded: 0 rows
+[2026-04-29 10:47:40] WO Links loaded: 0 rows
+[2026-04-29 10:47:40] === Load from DB complete — 8 tab(s) populated ===
+
+========== SESSION STARTED: 2026-04-29 10:49:36 ==========
+[2026-04-29 10:49:54] Bulk CSV export finished: 11 files, 0 rows -> E:\GitHub\Toolbox
+
+========== SESSION STARTED: 2026-04-29 10:50:39 ==========
+[2026-04-29 10:50:45] === Load from DB started ===
+[2026-04-29 10:50:45] Calendars loaded: 55 rows
+[2026-04-29 10:50:45] Machines loaded: 12 rows
+[2026-04-29 10:50:45] Operations loaded: 35 rows
+[2026-04-29 10:50:45] Routings loaded: 39 rows
+[2026-04-29 10:50:45] Materials loaded: 39 rows
+[2026-04-29 10:50:46] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-29 10:50:46] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-29 10:50:46] BOM loaded: 96 rows
+[2026-04-29 10:50:46] B_OF schema: column 'QTE' used for qty_order
+[2026-04-29 10:50:46] Work Orders loaded: 34 rows
+[2026-04-29 10:50:46] WO Links loaded: 0 rows
+[2026-04-29 10:50:46] === Load from DB complete — 8 tab(s) populated ===
+[2026-04-29 10:51:22] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:51:22] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-29 10:51:22] B_PERI time mode detected: text
+[2026-04-29 10:51:22] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-29 10:51:22] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-29 10:51:22] B_OF schema: column 'QTE' used for qty_order
+[2026-04-29 10:51:22] B_OF schema: column for mode_util not present in this version (optional)
+[2026-04-29 10:51:23] SQL generated successfully. 127141 caracteres.
+[2026-04-29 10:51:29] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:51:29] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-29 10:51:36] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:51:36] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-29 10:51:38] Transaction committed successfully.
+[2026-04-29 10:51:38] Execution finished: 507 statements OK, 0 errors.
+[2026-04-29 10:55:14] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:55:14] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-29 10:55:16] Transaction committed successfully.
+[2026-04-29 10:55:16] Execution finished: 507 statements OK, 0 errors.
+[2026-04-29 10:55:23] === Load from DB started ===
+[2026-04-29 10:55:23] Calendars loaded: 55 rows
+[2026-04-29 10:55:23] Machines loaded: 12 rows
+[2026-04-29 10:55:23] Operations loaded: 35 rows
+[2026-04-29 10:55:23] Routings loaded: 39 rows
+[2026-04-29 10:55:23] Materials loaded: 39 rows
+[2026-04-29 10:55:23] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-29 10:55:23] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-29 10:55:23] BOM loaded: 96 rows
+[2026-04-29 10:55:23] B_OF schema: column 'QTE' used for qty_order
+[2026-04-29 10:55:23] Work Orders loaded: 34 rows
+[2026-04-29 10:55:23] WO Links loaded: 0 rows
+[2026-04-29 10:55:23] === Load from DB complete — 8 tab(s) populated ===
+[2026-04-29 10:56:20] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:56:20] Items tab / Routing ID - row 12: 'MP' does not exist in the referenced tab.
+[2026-04-29 10:56:20] === Integrity Check finished with 1 issue(s) ===
+[2026-04-29 10:56:21] === Integrity Auto-Fix started ===
+[2026-04-29 10:56:22] === Integrity Auto-Fix finished — no automatic change was applied ===
+[2026-04-29 10:56:23] B_PERI time mode detected: text
+[2026-04-29 10:56:23] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-29 10:56:23] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-29 10:56:23] B_OF schema: column 'QTE' used for qty_order
+[2026-04-29 10:56:23] B_OF schema: column for mode_util not present in this version (optional)
+[2026-04-29 10:56:23] SQL generated successfully. 127588 caracteres.
+[2026-04-29 10:56:24] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:56:24] Items tab / Routing ID - row 12: 'MP' does not exist in the referenced tab.
+[2026-04-29 10:56:24] === Integrity Check finished with 1 issue(s) ===
+[2026-04-29 10:56:46] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:56:46] Items tab / Routing ID - row 12: 'MP' does not exist in the referenced tab.
+[2026-04-29 10:56:46] === Integrity Check finished with 1 issue(s) ===
+[2026-04-29 10:56:59] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:56:59] Items tab / Routing ID - row 12: 'MP' does not exist in the referenced tab.
+[2026-04-29 10:56:59] === Integrity Check finished with 1 issue(s) ===
+[2026-04-29 10:57:01] === Integrity Auto-Fix started ===
+[2026-04-29 10:57:01] === Integrity Auto-Fix finished — no automatic change was applied ===
+[2026-04-29 10:57:33] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:57:33] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-29 10:57:35] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:57:35] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-29 10:57:35] B_PERI time mode detected: text
+[2026-04-29 10:57:35] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-29 10:57:36] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-29 10:57:36] B_OF schema: column 'QTE' used for qty_order
+[2026-04-29 10:57:36] B_OF schema: column for mode_util not present in this version (optional)
+[2026-04-29 10:57:36] SQL generated successfully. 127600 caracteres.
+[2026-04-29 10:57:39] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:57:39] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-29 10:57:40] ERROR (stmt 516) on table [B_OF]: COM Error 0x80020009: [Microsoft][ODBC SQL Server Driver][SQL Server]The INSERT statement conflicted with the FOREIGN KEY constraint "FK2_B_OF". The conflict occurred in database "ORTEMS_DEMO", table "dbo.B_SER", column 'SERIE'.
+[2026-04-29 10:57:40]   HINT: A foreign key reference is missing. Check that the parent row (item/routing/calendar) exists before inserting the child row. Run FK Pre-validation for more details.
+[2026-04-29 10:57:40]   >> IF NOT EXISTS (SELECT 1 FROM B_OF WHERE NOF='WO001') |     INSERT INTO B_OF (NOF, CODEARTIC, NOMG, SERIE, VER_ART, QTE, DPLUSTOT, FPLUSTARD, CODEGEST, ETATOF, VER_EFFET_DEBUT, VER_EFFET_FIN) |     VALUES ('WO001', 'GEAR BOX 5', 'FINAL ASSEMBLY', '0', '00', 10, CONVERT(datetime, '01/06/2026 00:00', 103), CONVERT(datetime, '28/06/2026 23:59', 103), 'F', 'S', CONVERT(datetime,'01/01/1995',103), CONVERT ...
+[2026-04-29 10:57:40] Transaction ROLLED BACK due to error.
+[2026-04-29 10:58:52] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:58:52] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-29 10:58:56] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 10:58:56] === Integrity Check OK — all cross-tab references are consistent ===
+[2026-04-29 10:58:58] ERROR (stmt 516) on table [B_OF]: COM Error 0x80020009: [Microsoft][ODBC SQL Server Driver][SQL Server]The INSERT statement conflicted with the FOREIGN KEY constraint "FK2_B_OF". The conflict occurred in database "ORTEMS_DEMO", table "dbo.B_SER", column 'SERIE'.
+[2026-04-29 10:58:58]   HINT: A foreign key reference is missing. Check that the parent row (item/routing/calendar) exists before inserting the child row. Run FK Pre-validation for more details.
+[2026-04-29 10:58:58]   >> IF NOT EXISTS (SELECT 1 FROM B_OF WHERE NOF='WO001') |     INSERT INTO B_OF (NOF, CODEARTIC, NOMG, SERIE, VER_ART, QTE, DPLUSTOT, FPLUSTARD, CODEGEST, ETATOF, VER_EFFET_DEBUT, VER_EFFET_FIN) |     VALUES ('WO001', 'GEAR BOX 5', 'FINAL ASSEMBLY', '0', '00', 10, CONVERT(datetime, '01/06/2026 00:00', 103), CONVERT(datetime, '28/06/2026 23:59', 103), 'F', 'S', CONVERT(datetime,'01/01/1995',103), CONVERT ...
+[2026-04-29 10:58:58] Transaction ROLLED BACK due to error.
+
+========== SESSION STARTED: 2026-04-29 13:02:56 ==========
+[2026-04-29 13:03:17] === Load from DB started ===
+[2026-04-29 13:03:17] Calendars loaded: 55 rows
+[2026-04-29 13:03:17] Machines loaded: 12 rows
+[2026-04-29 13:03:17] Operations loaded: 35 rows
+[2026-04-29 13:03:17] Routings loaded: 39 rows
+[2026-04-29 13:03:17] Materials loaded: 39 rows
+[2026-04-29 13:03:17] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-29 13:03:17] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-29 13:03:17] BOM loaded: 96 rows
+[2026-04-29 13:03:17] B_OF schema: column 'QTE' used for qty_order
+[2026-04-29 13:03:17] Work Orders loaded: 34 rows
+[2026-04-29 13:03:17] WO Links loaded: 0 rows
+[2026-04-29 13:03:17] === Load from DB complete - 8 tab(s) populated ===
+
+========== SESSION STARTED: 2026-04-29 13:23:18 ==========
+[2026-04-29 13:23:24] === Load from DB started ===
+[2026-04-29 13:23:24] Calendars loaded: 55 rows
+[2026-04-29 13:23:24] Machines loaded: 12 rows
+[2026-04-29 13:23:24] Operations loaded: 35 rows
+[2026-04-29 13:23:24] Routings loaded: 39 rows
+[2026-04-29 13:23:24] Materials loaded: 39 rows
+[2026-04-29 13:23:25] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-29 13:23:25] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-29 13:23:25] BOM loaded: 96 rows
+[2026-04-29 13:23:25] B_OF schema: column 'QTE' used for qty_order
+[2026-04-29 13:23:25] Work Orders loaded: 34 rows
+[2026-04-29 13:23:25] WO Links loaded: 0 rows
+[2026-04-29 13:23:25] === Load from DB complete - 8 tab(s) populated ===
+
+========== SESSION STARTED: 2026-04-29 13:27:20 ==========
+[2026-04-29 13:27:26] === Load from DB started ===
+[2026-04-29 13:27:26] Calendars loaded: 55 rows
+[2026-04-29 13:27:26] Machines loaded: 12 rows
+[2026-04-29 13:27:26] Operations loaded: 35 rows
+[2026-04-29 13:27:26] Routings loaded: 39 rows
+[2026-04-29 13:27:26] Materials loaded: 39 rows
+[2026-04-29 13:27:26] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-04-29 13:27:26] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-04-29 13:27:26] BOM loaded: 96 rows
+[2026-04-29 13:27:26] B_OF schema: column 'QTE' used for qty_order
+[2026-04-29 13:27:26] Work Orders loaded: 34 rows
+[2026-04-29 13:27:26] WO Links loaded: 0 rows
+[2026-04-29 13:27:26] === Load from DB complete - 8 tab(s) populated ===
+[2026-04-29 13:28:00] === Integrity Check started (cross-tab reference validation) ===
+[2026-04-29 13:28:00] Items tab - row 2: required field in column 4 is empty.
+[2026-04-29 13:28:00] Items tab - row 12: required field in column 4 is empty.
+[2026-04-29 13:28:00] Items tab - row 13: required field in column 4 is empty.
+[2026-04-29 13:28:00] Items tab - row 39: required field in column 4 is empty.
+[2026-04-29 13:28:00] Items tab / Routing ID - row 12: 'MP' does not exist in the referenced tab.
+[2026-04-29 13:28:00] === Integrity Check finished with 5 issue(s) ===
