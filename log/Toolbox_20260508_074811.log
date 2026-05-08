@@ -1,0 +1,66 @@
+========== SESSION STARTED: 2026-05-08 07:48:11 ==========
+Application: Ortems Toolbox
+Version: 0.0.0.0
+Script path: E:\GitHub\Toolbox\Toolbox.au3
+Log file: E:\GitHub\Toolbox\log\Toolbox_20260508_074811.log
+Verbose Mode: ON
+Computer/User: LP16-FZI1-DSA / FZI1
+OS: WIN_11 X64
+============================================================
+[2026-05-08 07:48:11] Session log file created: E:\GitHub\Toolbox\log\Toolbox_20260508_074811.log
+[2026-05-08 07:48:15] [VERBOSE] UI controls disabled while executing: Test DB connection
+[2026-05-08 07:48:15] Connection test started for database ORTEMS_DEMO on server localhost\SQLEXPRESS
+[2026-05-08 07:48:15] [VERBOSE] Connection string: Driver={SQL Server};Server=localhost\SQLEXPRESS;Database=ORTEMS_DEMO;Trusted_Connection=yes;
+[2026-05-08 07:48:19] [VERBOSE] UI controls disabled while executing: Import workbook
+[2026-05-08 07:48:22] [VERBOSE] Workbook import requested: E:\GitHub\Toolbox\ortems_toolbox_export.xlsx
+[2026-05-08 07:48:32] [VERBOSE] Workbook sheet imported: Calendars = 55 row(s)
+[2026-05-08 07:48:34] [VERBOSE] Workbook sheet imported: Machines = 12 row(s)
+[2026-05-08 07:48:40] [VERBOSE] Workbook sheet imported: Operations = 35 row(s)
+[2026-05-08 07:48:43] [VERBOSE] Workbook sheet imported: Routings = 39 row(s)
+[2026-05-08 07:48:48] [VERBOSE] Workbook sheet imported: Items = 39 row(s)
+[2026-05-08 07:49:00] [VERBOSE] Workbook sheet imported: BOM = 102 row(s)
+[2026-05-08 07:49:03] [VERBOSE] Workbook sheet imported: WorkOrders = 34 row(s)
+[2026-05-08 07:49:03] [VERBOSE] Workbook sheet imported: WOLinks = 0 row(s)
+[2026-05-08 07:49:04] [VERBOSE] Workbook sheet imported: SecondaryResources = 0 row(s)
+[2026-05-08 07:49:04] [VERBOSE] Workbook sheet imported: Capacity = 0 row(s)
+[2026-05-08 07:49:04] [VERBOSE] Workbook sheet imported: InventoryMovements = 0 row(s)
+[2026-05-08 07:49:04] === Integrity Check started (cross-tab reference validation) ===
+[2026-05-08 07:49:04] === Integrity Check OK - all cross-tab references are consistent ===
+[2026-05-08 07:49:04] Workbook import finished: 316 data rows <- E:\GitHub\Toolbox\ortems_toolbox_export.xlsx
+[2026-05-08 07:49:09] [VERBOSE] UI controls disabled while executing: Generate SQL
+[2026-05-08 07:49:09] === Integrity Check started (cross-tab reference validation) ===
+[2026-05-08 07:49:09] === Integrity Check OK - all cross-tab references are consistent ===
+[2026-05-08 07:49:09] B_PERI time mode detected: text
+[2026-05-08 07:49:09] B_VER_ART schema: column for routing_phase not present in this version (optional)
+[2026-05-08 07:49:09] B_VER_ART schema: no FK parent column detected for routing_phase through B_PHAS.NOPHASE
+[2026-05-08 07:49:09] B_VER_ART schema: no FK parent column detected for routing_id through B_PHAS.NOMG
+[2026-05-08 07:49:09] B_VER_ART schema: no FK parent column detected for routing_operation through B_PHAS.OPE
+[2026-05-08 07:49:09] E_GAMME_NOME table not found in this schema - explicit bridge generation skipped.
+[2026-05-08 07:49:09] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-05-08 07:49:09] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-05-08 07:49:09] B_OF schema: column 'QTE' used for qty_order
+[2026-05-08 07:49:09] B_OF schema: column for mode_util not present in this version (optional)
+[2026-05-08 07:49:09] B_BT schema: column for work_order not present in this version (optional)
+[2026-05-08 07:49:10] B_BT schema: no FK parent column detected for work_order through B_OF.NOF
+[2026-05-08 07:49:10] B_BT schema: column for routing not present in this version (optional)
+[2026-05-08 07:49:10] B_BT schema: no FK parent column detected for routing through B_PHAS.NOMG
+[2026-05-08 07:49:10] B_BT schema: column 'BT_NOPHASE' used for phase
+[2026-05-08 07:49:10] B_BT schema: column 'BT_OPE' used for operation
+[2026-05-08 07:49:10] B_BT schema: column 'MACHINE' used for machine
+[2026-05-08 07:49:10] B_BT schema: column for item not present in this version (optional)
+[2026-05-08 07:49:10] B_BT schema: column for version not present in this version (optional)
+[2026-05-08 07:49:10] B_BT schema: column for serie not present in this version (optional)
+[2026-05-08 07:49:10] B_BT schema: column 'BT_QTE' used for qty
+[2026-05-08 07:49:10] B_BT schema: column for start_date not present in this version (optional)
+[2026-05-08 07:49:10] B_BT schema: column for end_date not present in this version (optional)
+[2026-05-08 07:49:10] B_BT schema: column 'BT_CODEGEST' used for codegest
+[2026-05-08 07:49:10] B_BT schema: column for status not present in this version (optional)
+[2026-05-08 07:49:10] B_BT schema: column for mode_util not present in this version (optional)
+[2026-05-08 07:49:10] WARNING: B_BT generation skipped. Missing required key mapping: WO='', routing='', phase='BT_NOPHASE'.
+[2026-05-08 07:49:10] B_BT actual columns: NOM_ENC, E_NOF, BT_NOPHASE, BT_FRACTION, ILOT, MACHINE, B_I_ILOT, CODE_GPE, TYP_PIECE, UTIL, CODOUTILL, LC, ECHELON, B_L_LC, B_L_ECHELON, B_M_ILOT, B_M_MACHINE, BT_QTE, BT_DURREAL, BT_CODEBASET, BT_QTEREAL, BT_QTEREST, BT_TEMPSPASS, BT_TEMPSREST, BT_DATEFIN, BT_DATE_CAL, BT_DATE_CAL_SF, BT_DATE_CAL_MP, BT_COEF_T, BT_COEF_QTE, BT_LIBPHASE, BT_TEMPSTECH, BT_AFFECTFORCE, BT_ETATOP, BT_AFFECT, BT_THM, BT_THM_AV, BT_INTERUPT, BT_EFFECTSTAN, BT_EFFECTMIN, BT_EFFECTMAX, BT_MONTEE_CADENCE, BT_DURPREP, BT_DURCHANG, BT_TEMPSCYCL, BT_QTE_FCT, BT_OPE, BT_OPEDESCR, BT_INTENSITE, BT_FINPLUSTARD, BT_DATEG, PHASE_LOGIQUE, BT_PROP_DATE_CAL, BT_DATE_DATE_CAL, CHGT_PARAM, RANG_GPE_RESS, PHASE_PROD, BT_DATE_DEB_PROD, BT_PRIORITE, BT_MEM, BT_DISPO, BT_INTENSITE_QTE, BT_ROLE, BT_ART_CAL_MP, BT_ART_CAL_SF, CALAGETOT, POTENTIEL, NATURE, STATUS_POTENTIEL, FORCER_ACTIF_POTENTIEL, DATE_DEB_ENCOURS, BT_DATE_CAL_SAUVE, LBE_PARAM_LOCAUX, LBE_MARGE_AVANCE, LBE_CTRL_AVANCE, LBE_MARGE_RETARD, LBE_CTRL_RETARD, LBE_FIGE, LBE_STATUT, LBE_SPECIF, BT_PREMSUIVI, BT_NUMORDRE, BT_CODEBASET_CHARGE, BT_DURREAL_CHARGE, BT_MODE_CHARGE, BT_CST_CHARGE, BT_CSMANAGEMENT, BT_CSUNITMODE, BT_CSMINIMAL, BT_CSINITIAL, BT_CSFREEZE, BT_COEF_FRAC, BT_DATE_DEB_OBJ, BT_DATE_FIN_OBJ, BT_DATE_DEB_PLUSTOT, BT_DELAI, BT_DATE_DEB_PLA_REF, BT_DATE_FIN_PLA_REF, BT_STATUT_MATIERE, BT_PUN, BT_PUN_STATUT, BT_PUN_DATE_DEB, BT_PUN_DATE_FIN, BT_PUN_DURCHANG, BT_DATE_LIS, BT_LIEN_SUPPR, URL, BT_STATION_COUNT, BT_STATION_FROM, BT_STATION_TO, BT_TAKT_TIME, BT_CODEGEST, RESERVED1, RESERVED2, RESERVED3, RESERVED4, RESERVED5, UE_RESERVED1, UE_RESERVED2, UE_RESERVED3, UE_RESERVED4, UE_RESERVED5, FREE1, FREE2, FREE3, FREE4, FREE5, FREE6, FREE7, FREE8, FREE9, FREE10, FREE11, FREE12, FREE13, FREE14, FREE15, DATE_PLA, DURLCREST, DURLCRESTI
+[2026-05-08 07:49:10] SQL generated successfully. 181058 characters.
+[2026-05-08 07:49:12] [VERBOSE] UI controls disabled while executing: Run SQL on DB
+[2026-05-08 07:49:13] === Integrity Check started (cross-tab reference validation) ===
+[2026-05-08 07:49:13] === Integrity Check OK - all cross-tab references are consistent ===
+[2026-05-08 07:49:19] Transaction committed successfully.
+[2026-05-08 07:49:19] Execution finished: 674 statements OK, 0 errors.

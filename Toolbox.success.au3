@@ -1,3 +1,15 @@
+#AutoIt3Wrapper_UseX64=y
+#AutoIt3Wrapper_UseUpx=n
+#AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
+#AutoIt3Wrapper_Res_Fileversion=1.1.2.8
+#AutoIt3Wrapper_Res_ProductVersion=1.0.0.0
+#AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
+#AutoIt3Wrapper_Icon=Toolbox.ico
+#AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
+#AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
+#AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Updater.exe
+
+
 #NoTrayIcon
 #include <GUIConstantsEx.au3>
 #include <WindowsConstants.au3>
@@ -25,6 +37,35 @@
 Opt("GUIOnEventMode", 1)
 Opt("MustDeclareVars", 0)
 
+Global $DevBy = "Developed by Fabricio Zambroni"
+
+; ----------------------------------------------------------------------------------------------------------------------
+; Updater
+; ----------------------------------------------------------------------------------------------------------------------
+Global $UpdatePath = IniRead(@ScriptDir & "\settings.ini","Update","path","") ;Update Path
+If $UpdatePath = "" Then
+	IniWrite(@ScriptDir & "\settings.ini","Update","path","\\lp16-fzi1-dsa\Toolbox")
+	$UpdatePath = "\\lp16-fzi1-dsa\Toolbox"
+EndIf
+
+
+Global $UpdatedVersion = FileGetVersion($UpdatePath & "\" & @ScriptName)
+Global $currentVersion = FileGetVersion(@ScriptFullPath)
+Global $Updater_File = @TempDir & "\Updater.exe"
+
+If $UpdatedVersion > $currentVersion Then
+	FileCopy($UpdatePath & "\" & @ScriptName, @ScriptDir & "\" & StringReplace(@ScriptName, ".exe", ".tmp"), 9)
+EndIf
+ConsoleWrite(@ScriptDir & "\" & StringReplace(@ScriptName, ".exe", ".tmp") & @CRLF)
+If FileExists(@ScriptDir & "\" & StringReplace(@ScriptName, ".exe", ".tmp")) And Not StringInStr(@ScriptName, ".au3") Then
+	ConsoleWrite("Updating..." & @CRLF)
+	FileInstall("Updater.exe", $Updater_File, 1)
+	Sleep(500)
+	Run(@TempDir & "\Updater.exe '" & @ScriptDir & "'")
+	Sleep(100)
+	Exit
+EndIf
+
 ; === Window sizing ===
 Global Const $MIN_W = 1050
 Global Const $MIN_H = 700
@@ -32,7 +73,7 @@ Global Const $BOTTOM_BAR_H = 70
 Global Const $TAB_TOP_Y = 58
 
 ; === GLOBAL CONSTANTS ===
-Global Const $TITLE       = "Ortems Toolbox v3.0"
+Global Const $TITLE       = "Ortems Toolbox"
 Global Const $APP_WIDTH   = 1100
 Global Const $APP_HEIGHT  = 720
 Global Const $COL_W       = 140
@@ -83,10 +124,22 @@ Global $g_hLV_Mat, $g_hLV_BOM, $g_hLV_WO, $g_hLV_WOL
 Global $g_hLV_SR, $g_hLV_Cap, $g_hLV_Stk
 Global $g_hLog
 Global $g_sIntegrityReport = ""
+Global $g_sLogDir = @ScriptDir & "\log"
+Global $g_sLogFile = ""
+Global $g_bVerbose = False
+Global $g_iBusyDepth = 0
+Global $g_aBusyControls[0]
+Global $g_aBusyStates[0]
+Global $g_sBusyFooterBackup = ""
+Global $g_idTabSQLItem = 0
 ; Tab enable/disable state (Tab control doesn't truly disable items; we block selection via WM_NOTIFY)
 Global $g_aTabEnabled[0]
 Global $g_aTabBaseText[0]
 Global $g_bAllowProgrammaticTabChange = False
+
+; ListView sorting state - one click ascending, second click descending
+Global Const $ORTEMS_LVN_COLUMNCLICK = -108
+Global $g_aLVSortState[0][3] ; [ListView control ID, last column, descending flag]
 
 ; Settings persistence
 Global Const $g_sIniFile = @ScriptDir & "\settings.ini"
@@ -98,6 +151,12 @@ Global $g_sLastComError = ""
 Func _ComErrorHandler()
     Local $oErr = $g_oComErr
     $g_sLastComError = "COM Error 0x" & Hex($oErr.number, 8) & ": " & $oErr.description
+EndFunc
+
+Func _GetFooterText()
+    Local $sVersion = FileGetVersion(@ScriptFullPath)
+    If StringStripWS($sVersion, 3) = "" Then $sVersion = "N/A"
+    Return "Version: " & $sVersion & " | " & $TITLE & " | " & @YEAR
 EndFunc
 
 
@@ -138,9 +197,13 @@ Func CreateMainWindow()
     GUIRegisterMsg($WM_NOTIFY, "_WM_NOTIFY")
 
     ; Barra de titulo/logo
-    GUICtrlCreateLabel("ORTEMS TOOLBOX", 10, 8, 300, 26)
+    GUICtrlCreateLabel("ORTEMS TOOLBOX", 10, 8, 170, 26)
     GUICtrlSetFont(-1, 14, 800, 0, "Segoe UI")
     GUICtrlSetColor(-1, 0x003366)
+
+    GUICtrlCreateLabel("BETA VERSION", 188, 11, 130, 20)
+    GUICtrlSetFont(-1, 10, 800, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0xCC0000)
 
     GUICtrlCreateLabel("Validated Ortems demo-data builder for SQL Server", 10, 34, 500, 18)
     GUICtrlSetFont(-1, 9, 400, 2, "Segoe UI")
@@ -211,7 +274,7 @@ Func CreateMainWindow()
     _CreateTabStockMov()
 
     ; ---- TAB 14: GENERATE SQL ----
-    GUICtrlCreateTabItem("14. Generate & Run SQL")
+    $g_idTabSQLItem = GUICtrlCreateTabItem("14. Generate & Run SQL")
     _CreateTabSQL()
 
     GUICtrlCreateTabItem("")
@@ -221,48 +284,59 @@ Func CreateMainWindow()
     GUICtrlSetBkColor(-1, 0xCCCCCC)
 
     Global $g_btnImportXLS = GUICtrlCreateButton("Import Workbook...", 10, $APP_HEIGHT - 58, 132, 32)
-    GUICtrlSetOnEvent($g_btnImportXLS, "_ImportExcel")
+    GUICtrlSetOnEvent($g_btnImportXLS, "_ImportExcel_Click")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetTip($g_btnImportXLS, "Import a round-trip Excel workbook exported by this tool")
+    _RegisterBusyControl($g_btnImportXLS)
 
     Global $g_btnExportXLS = GUICtrlCreateButton("Export Workbook...", 150, $APP_HEIGHT - 58, 132, 32)
-    GUICtrlSetOnEvent($g_btnExportXLS, "_ExportExcel")
+    GUICtrlSetOnEvent($g_btnExportXLS, "_ExportExcel_Click")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetTip($g_btnExportXLS, "Export all tabs to a structured Excel workbook that can be imported back")
+    _RegisterBusyControl($g_btnExportXLS)
 
     Global $g_btnLoadDB = GUICtrlCreateButton("Load from DB", 290, $APP_HEIGHT - 58, 122, 32)
-    GUICtrlSetOnEvent($g_btnLoadDB, "_LoadFromDB")
+    GUICtrlSetOnEvent($g_btnLoadDB, "_LoadFromDB_Click")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
     GUICtrlSetBkColor($g_btnLoadDB, 0xE8F4FD)
     GUICtrlSetTip($g_btnLoadDB, "Read data from the connected Ortems database and populate all tabs")
+    _RegisterBusyControl($g_btnLoadDB)
 
     Global $g_btnClearDB = GUICtrlCreateButton("Clear DB", 420, $APP_HEIGHT - 58, 92, 32)
-    GUICtrlSetOnEvent($g_btnClearDB, "_ClearDatabase")
+    GUICtrlSetOnEvent($g_btnClearDB, "_ClearDatabase_Click")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetBkColor($g_btnClearDB, 0xFFDDDD)
+    _RegisterBusyControl($g_btnClearDB)
 
     Global $g_btnGenerate = GUICtrlCreateButton("Generate SQL", 520, $APP_HEIGHT - 58, 118, 32)
-    GUICtrlSetOnEvent($g_btnGenerate, "_GenerateSQL")
+    GUICtrlSetOnEvent($g_btnGenerate, "_GenerateSQL_Click")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
+    _RegisterBusyControl($g_btnGenerate)
 
     Global $g_btnExecute = GUICtrlCreateButton("Run on DB", 646, $APP_HEIGHT - 58, 115, 32)
-    GUICtrlSetOnEvent($g_btnExecute, "_ExecuteSQL")
+    GUICtrlSetOnEvent($g_btnExecute, "_ExecuteSQL_Click")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
     GUICtrlSetBkColor($g_btnExecute, 0xDDFFDD)
+    _RegisterBusyControl($g_btnExecute)
 
     Global $g_btnSaveSQL = GUICtrlCreateButton("Save SQL...", 769, $APP_HEIGHT - 58, 105, 32)
-    GUICtrlSetOnEvent($g_btnSaveSQL, "_SaveSQL")
+    GUICtrlSetOnEvent($g_btnSaveSQL, "_SaveSQL_Click")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    _RegisterBusyControl($g_btnSaveSQL)
 
 	Global $g_btnIntegrity = GUICtrlCreateButton("Integrity Check", 882, $APP_HEIGHT - 58, 125, 32)
-    GUICtrlSetOnEvent($g_btnIntegrity, "_IntegrityCheck")
+    GUICtrlSetOnEvent($g_btnIntegrity, "_IntegrityCheck_Click")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
     GUICtrlSetBkColor($g_btnIntegrity, 0xFFF2CC)
     GUICtrlSetTip($g_btnIntegrity, "Validate cross-tab references before generating or running the SQL")
+    _RegisterBusyControl($g_btnIntegrity)
 
-;~     $g_lblFooter = GUICtrlCreateLabel($TITLE & " | Replaces Toolbox_v2.0.1.xlsm | " & @YEAR, 920, $APP_HEIGHT - 45, 170, 20)
-;~     GUICtrlSetFont(-1, 7, 400, 0, "Segoe UI")
-;~     GUICtrlSetColor(-1, 0x999999)
+    $g_lblFooter = GUICtrlCreateLabel($DevBy, 715, $APP_HEIGHT - 22, 390, 20);,$SS_GRAYFRAME)
+	GUICtrlSetFont(-1, 7, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x777777)
+    $g_lblFooter2 = GUICtrlCreateLabel(_GetFooterText(), 15, $APP_HEIGHT - 22, 390, 20);,$SS_GRAYFRAME)
+    GUICtrlSetFont(-1, 7, 400, 0, "Segoe UI")
+    GUICtrlSetColor(-1, 0x777777)
     _InitTabState()
 EndFunc
 
@@ -278,18 +352,21 @@ Func _CreateTabDatabase()
     GUICtrlCreateLabel("Server / Instance:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     Global $g_edtServer = GUICtrlCreateInput("localhost\SQLEXPRESS", $xV, $y, 220, 22)
+    _RegisterBusyControl($g_edtServer)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     $y += 32
 
     GUICtrlCreateLabel("Database name:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     Global $g_edtDatabase = GUICtrlCreateInput("ORTEMS_DEMO", $xV, $y, 220, 22)
+    _RegisterBusyControl($g_edtDatabase)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     $y += 32
 
     GUICtrlCreateLabel("Authentication:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     Global $g_cmbAuth = GUICtrlCreateCombo("Windows Authentication", $xV, $y, 220, 22)
+    _RegisterBusyControl($g_cmbAuth)
     GUICtrlSetData($g_cmbAuth, "SQL Server Authentication")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetOnEvent($g_cmbAuth, "_OnAuthChange")
@@ -298,6 +375,7 @@ Func _CreateTabDatabase()
     GUICtrlCreateLabel("User:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     Global $g_edtUser = GUICtrlCreateInput("", $xV, $y, 220, 22)
+    _RegisterBusyControl($g_edtUser)
     GUICtrlSetState($g_edtUser, $GUI_DISABLE)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     $y += 32
@@ -305,18 +383,21 @@ Func _CreateTabDatabase()
     GUICtrlCreateLabel("Password:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     Global $g_edtPass = GUICtrlCreateInput("", $xV, $y, 220, 22, $ES_PASSWORD)
+    _RegisterBusyControl($g_edtPass)
     GUICtrlSetState($g_edtPass, $GUI_DISABLE)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     $y += 38
 
     Global $g_btnConnect = GUICtrlCreateButton("DB Connect", $xV, $y, 160, 30)
-    GUICtrlSetOnEvent($g_btnConnect, "_TestConnection")
+    GUICtrlSetOnEvent($g_btnConnect, "_TestConnection_Click")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
 
     Global $g_btnInspect = GUICtrlCreateButton("Inspect Table...", $xV + 170, $y, 140, 30)
-    GUICtrlSetOnEvent($g_btnInspect, "_InspectTable")
+    GUICtrlSetOnEvent($g_btnInspect, "_InspectTable_Click")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetTip($g_btnInspect, "Show columns of any Ortems table (useful to verify column names)")
+    _RegisterBusyControl($g_btnConnect)
+    _RegisterBusyControl($g_btnInspect)
 
     ; Connection string display
     $y = 330
@@ -362,9 +443,11 @@ Func _CreateTabModules()
     GUICtrlSetOnEvent($g_rbPS, "_OnModuleSelectionChanged")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetState($g_rbPS, $GUI_CHECKED)
+    _RegisterBusyControl($g_rbPS)
     Global $g_rbMP = GUICtrlCreateRadio("MP - Master Planning (bucket planning)", $xL + 30, $y + 62, 420, 20)
     GUICtrlSetOnEvent($g_rbMP, "_OnModuleSelectionChanged")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    _RegisterBusyControl($g_rbMP)
     $y += 92
 
     ; Q2: SRP
@@ -409,6 +492,7 @@ Func _CreateTabModules()
     GUICtrlSetOnEvent($g_btnApplyMod, "_ApplyModules")
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
     GUICtrlSetBkColor($g_btnApplyMod, 0xDDEEFF)
+    _RegisterBusyControl($g_btnApplyMod)
 
     Global $g_lblModHint = GUICtrlCreateLabel("  OK  Tabs are updated automatically when you change a selection.", 230, $y + 6, 660, 18)
     GUICtrlSetFont(-1, 9, 400, 2, "Segoe UI")
@@ -430,7 +514,7 @@ Func _CreateModuleCheckbox($y, $xL, $sNum, $sText)
     Local $hChk = GUICtrlCreateCheckbox($sText, $xL + 50, $y, 800, 20,-1);,$WS_EX_TOPMOST)
     GUICtrlSetOnEvent($hChk, "_OnModuleSelectionChanged")
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Return $hChk
+    Return _RegisterBusyControl($hChk)
 EndFunc
 
 ;=============================================================================
@@ -614,7 +698,7 @@ Func _CreateTabMaterials()
     GUICtrlSetFont(-1, 11, 700, 0, "Segoe UI")
     GUICtrlCreateLabel("An item is a product that is consumed or produced during the production process.", $xL, 103, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 2, "Segoe UI")
-    GUICtrlCreateLabel("Type: MP=Raw material | SF=Semi-finished | PF=Finished good   |   Version: 00=standard, STD, SPT, etc.", $xL, 123, 900, 18)
+    GUICtrlCreateLabel("Type: MP=Raw material | SF=Semi-finished | PF=Finished good   |   Version is required for SF/PF only", $xL, 123, 900, 18)
     GUICtrlSetFont(-1, 8, 400, 0, "Segoe UI")
     GUICtrlSetColor(-1, 0x555555)
 
@@ -635,8 +719,8 @@ Func _CreateTabMaterials()
 EndFunc
 
 Func _LoadExampleMaterials()
-    _AddMaterial("R_Axes", "Axes Raw", "MP", "00", "", 300)
-    _AddMaterial("R_Housing", "Housing Raw", "MP", "00", "", 72)
+    _AddMaterial("R_Axes", "Axes Raw", "MP", "", "", 300)
+    _AddMaterial("R_Housing", "Housing Raw", "MP", "", "", 72)
     _AddMaterial("STD_Axes", "Axes Standard", "SF", "STD", "STD_AX", 23)
     _AddMaterial("SPT_Axes", "Axes Sport", "SF", "SPT", "SPT_AX", 33)
     _AddMaterial("Housing", "Housing", "SF", "00", "CT", 36)
@@ -848,18 +932,22 @@ Func _CreateTabSQL()
 
     ; Options row (inline, no group box needed)
     Local $y = 128
-    GUICtrlCreateGroup("Options", $xL, $y, 420, 68)
-    Global $g_chkClearFirst = GUICtrlCreateCheckbox("Clear existing data before insert (DELETE FROM ...)", $xL + 15, $y + 18, 390, 20)
+    GUICtrlCreateGroup("Options", $xL, $y, 520, 92)
+    Global $g_chkClearFirst = GUICtrlCreateCheckbox("Clear existing data before insert (DELETE FROM ...)", $xL + 15, $y + 18, 470, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetState($g_chkClearFirst, $GUI_CHECKED)
-    Global $g_chkTransaction = GUICtrlCreateCheckbox("Wrap in a transaction (auto ROLLBACK on error)", $xL + 15, $y + 40, 390, 20)
+    _RegisterBusyControl($g_chkClearFirst)
+    Global $g_chkTransaction = GUICtrlCreateCheckbox("Wrap in a transaction (auto ROLLBACK on error)", $xL + 15, $y + 40, 470, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetState($g_chkTransaction, $GUI_CHECKED)
-
-
+    _RegisterBusyControl($g_chkTransaction)
+    Global $g_chkVerbose = GUICtrlCreateCheckbox("Verbose Mode (detailed troubleshooting log)", $xL + 15, $y + 62, 470, 20)
+    GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    GUICtrlSetOnEvent($g_chkVerbose, "_OnVerboseModeChanged")
+    _RegisterBusyControl($g_chkVerbose)
 
     ; SQL editor
-    $y = 206
+    $y = 236
     GUICtrlCreateLabel("Generated SQL:", $xL, $y, 200, 18)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
 
@@ -890,21 +978,25 @@ Func _CreateCRUDButtons($y, $sAdd, $sEdit, $sDel, $sDelAll, $sImp = "", $sExp = 
     GUICtrlSetOnEvent($btnAdd, $sAdd)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetTip($btnAdd, "Add a new row to this tab")
+    _RegisterBusyControl($btnAdd)
 
     Local $btnEdit = GUICtrlCreateButton("Edit", 140, $y - 2, 90, 28)
     GUICtrlSetOnEvent($btnEdit, $sEdit)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetTip($btnEdit, "Edit the currently selected row")
+    _RegisterBusyControl($btnEdit)
 
     Local $btnDel = GUICtrlCreateButton("- Remove", 240, $y - 2, 100, 28)
     GUICtrlSetOnEvent($btnDel, $sDel)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetTip($btnDel, "Remove the currently selected row")
+    _RegisterBusyControl($btnDel)
 
     Local $btnDelAll = GUICtrlCreateButton("Clear All", 350, $y - 2, 105, 28)
     GUICtrlSetOnEvent($btnDelAll, $sDelAll)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetTip($btnDelAll, "Remove ALL rows in this tab")
+    _RegisterBusyControl($btnDelAll)
 
     ; Load Example - highlighted so users see it as the easy way to populate a tab
     If $sLoadEx <> "" Then
@@ -913,14 +1005,17 @@ Func _CreateCRUDButtons($y, $sAdd, $sEdit, $sDel, $sDelAll, $sImp = "", $sExp = 
         GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
         GUICtrlSetBkColor($btnLoadEx, 0xE8F4FD)
         GUICtrlSetTip($btnLoadEx, "Fill this tab with sample demo data (appends to any existing rows)")
+        _RegisterBusyControl($btnLoadEx)
     EndIf
 
     Local $btnImp = GUICtrlCreateButton("Import CSV...", 615, $y - 2, 120, 28)
     If $sImp <> "" Then GUICtrlSetOnEvent($btnImp, $sImp)
+    _RegisterBusyControl($btnImp)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 
     Local $btnExp = GUICtrlCreateButton("Export CSV...", 745, $y - 2, 120, 28)
     If $sExp <> "" Then GUICtrlSetOnEvent($btnExp, $sExp)
+    _RegisterBusyControl($btnExp)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
 EndFunc
 
@@ -1043,6 +1138,7 @@ Func _DialogGetValue(ByRef $aFields, ByRef $aValues, $sFieldName)
 EndFunc
 
 Func _Lookup_RoutingIDsForItem($sItemID)
+    If _ItemIsRawMaterial($sItemID) Then Return ""
     Local $sList = _LVColumnPipeFiltered1($g_hLV_Mat, 4, 0, $sItemID)
     If $sList = "" Then $sList = _LVColumnPipe($g_hLV_Rout, 0)
     Return $sList
@@ -1055,6 +1151,7 @@ Func _Lookup_RoutingIDsForWO($sWOID)
 EndFunc
 
 Func _Lookup_ItemVersions($sItemID = "", $sRoutingID = "")
+    If $sItemID <> "" And _ItemIsRawMaterial($sItemID) Then Return ""
     Local $sList = ""
     If $sItemID <> "" And $sRoutingID <> "" Then $sList = _LVColumnPipeFiltered2($g_hLV_Mat, 3, 0, $sItemID, 4, $sRoutingID)
     If $sList = "" And $sItemID <> "" Then $sList = _LVColumnPipeFiltered1($g_hLV_Mat, 3, 0, $sItemID)
@@ -1183,6 +1280,10 @@ Func _DialogLookupAllowsBlank($sTitle, $sFieldName, ByRef $aFields, ByRef $aValu
     If StringInStr($t, "machine") And ($f = "calendar id" Or $f = "capacity calendar id") Then Return True
     If StringInStr($t, "secondary resource") And $f = "capacity calendar id" Then Return True
     If StringInStr($t, "inventory movement") And ($f = "routing id" Or $f = "routing") Then Return True
+    If StringInStr($t, "inventory movement") And ($f = "version" Or $f = "routing version") Then
+        Local $sItem = _DialogGetValue($aFields, $aValues, "Item ID")
+        If _ItemIsRawMaterial($sItem) Then Return True
+    EndIf
     Return False
 EndFunc
 
@@ -1310,7 +1411,9 @@ Func _ValidateDialogLookupValues($sTitle, ByRef $aFields, ByRef $aValues)
         Local $sRout = _DialogGetValue($aFields, $aValues, "Routing ID")
         Local $sPhase = _DialogGetValue($aFields, $aValues, "Phase")
         If $sParent <> "" And Not _LVHasValueInColumn($g_hLV_Mat, 0, $sParent) Then _AppendDialogError($sErrors, "Parent item ID must exist in the Items tab.")
+        If $sParent <> "" And _ItemIsRawMaterial($sParent) Then _AppendDialogError($sErrors, "Parent item cannot be MP. Raw materials do not have produced version/routing.")
         If $sComp <> "" And Not _LVHasValueInColumn($g_hLV_Mat, 0, $sComp) Then _AppendDialogError($sErrors, "Component item ID must exist in the Items tab.")
+        If $sParent <> "" And Not _ItemIsRawMaterial($sParent) And $sPVer = "" Then _AppendDialogError($sErrors, "Parent version is required for manufactured parent items.")
         If $sParent <> "" And $sPVer <> "" And Not _LVHasRowMatching2($g_hLV_Mat, 0, $sParent, 3, $sPVer) Then _AppendDialogError($sErrors, "Parent version must exist for the selected parent item.")
         If $sRout <> "" And Not _LVHasValueInColumn($g_hLV_Rout, 0, $sRout) Then _AppendDialogError($sErrors, "Routing ID must exist in the Routings tab.")
         If $sRout <> "" And $sPhase <> "" And Not _LVHasRowMatching2($g_hLV_Rout, 0, $sRout, 2, $sPhase) Then _AppendDialogError($sErrors, "Phase must exist for the selected Routing ID.")
@@ -1321,6 +1424,7 @@ Func _ValidateDialogLookupValues($sTitle, ByRef $aFields, ByRef $aValues)
         Local $sRoutWO = _DialogGetValue($aFields, $aValues, "Routing ID")
         Local $sVerWO = _DialogGetValue($aFields, $aValues, "Version")
         If $sItem <> "" And Not _LVHasValueInColumn($g_hLV_Mat, 0, $sItem) Then _AppendDialogError($sErrors, "Item ID must exist in the Items tab.")
+        If $sItem <> "" And _ItemIsRawMaterial($sItem) Then _AppendDialogError($sErrors, "Work Orders must produce manufactured items. MP raw materials do not have routing/version.")
         If $sRoutWO <> "" And Not _LVHasValueInColumn($g_hLV_Rout, 0, $sRoutWO) Then _AppendDialogError($sErrors, "Routing ID must exist in the Routings tab.")
         If $sItem <> "" And $sRoutWO <> "" And $sVerWO <> "" And Not _LVHasRowMatching3($g_hLV_Mat, 0, $sItem, 4, $sRoutWO, 3, $sVerWO) Then _AppendDialogError($sErrors, "The Item ID + Routing ID + Version combination must exist in the Items tab.")
     EndIf
@@ -1331,7 +1435,14 @@ Func _ValidateDialogLookupValues($sTitle, ByRef $aFields, ByRef $aValues)
         Local $sInvVer = _DialogGetValue($aFields, $aValues, "Version")
         If $sInvItem <> "" And Not _LVHasValueInColumn($g_hLV_Mat, 0, $sInvItem) Then _AppendDialogError($sErrors, "Item ID must exist in the Items tab.")
         If $sInvRout <> "" And Not _LVHasValueInColumn($g_hLV_Rout, 0, $sInvRout) Then _AppendDialogError($sErrors, "Routing ID must exist in the Routings tab.")
-        If $sInvItem <> "" And $sInvRout <> "" And $sInvVer <> "" And Not _LVHasRowMatching3($g_hLV_Mat, 0, $sInvItem, 4, $sInvRout, 3, $sInvVer) Then _AppendDialogError($sErrors, "The Item ID + Routing ID + Version combination must exist in the Items tab.")
+        If $sInvItem <> "" And _ItemIsRawMaterial($sInvItem) Then
+            If $sInvRout <> "" Then _AppendDialogError($sErrors, "MP raw materials cannot have Routing ID. Leave Routing ID blank.")
+            If $sInvVer <> "" Then _AppendDialogError($sErrors, "MP raw materials cannot have Version. Leave Version blank.")
+        ElseIf $sInvItem <> "" Then
+            If $sInvVer = "" Then _AppendDialogError($sErrors, "Version is required for manufactured inventory movements.")
+            If $sInvRout = "" Or $sInvVer = "" Then _AppendDialogError($sErrors, "Routing ID and Version are required for manufactured inventory movements.")
+        EndIf
+        If $sInvItem <> "" And Not _ItemIsRawMaterial($sInvItem) And $sInvRout <> "" And $sInvVer <> "" And Not _LVHasRowMatching3($g_hLV_Mat, 0, $sInvItem, 4, $sInvRout, 3, $sInvVer) Then _AppendDialogError($sErrors, "The Item ID + Routing ID + Version combination must exist in the Items tab.")
     EndIf
 
     If StringInStr($t, "operation") Or StringInStr($t, "secondary resource") Then
@@ -1566,8 +1677,13 @@ Func _ValidateDialogInput($sTitle, ByRef $aFields, ByRef $aValues)
         If UBound($aValues) >= 5 Then
             If StringStripWS($aValues[0], 3) = "" Then _AppendDialogError($sErrors, "Item ID is required.")
             If StringStripWS($aValues[2], 3) = "" Then _AppendDialogError($sErrors, "Type is required.")
-            If StringStripWS($aValues[3], 3) = "" Then _AppendDialogError($sErrors, "Version is required.")
-            If Not _IsRawMaterialType($aValues[2]) And StringStripWS($aValues[4], 3) = "" Then _AppendDialogError($sErrors, "Routing ID is required for manufactured items. Raw materials (MP) may leave it blank.")
+            If _IsRawMaterialType($aValues[2]) Then
+                If StringStripWS($aValues[3], 3) <> "" Then _AppendDialogError($sErrors, "Raw materials (MP) cannot have Version. Leave Version blank.")
+                If StringStripWS($aValues[4], 3) <> "" Then _AppendDialogError($sErrors, "Raw materials (MP) cannot have Routing ID. Leave Routing ID blank.")
+            Else
+                If StringStripWS($aValues[3], 3) = "" Then _AppendDialogError($sErrors, "Version is required for manufactured items.")
+                If StringStripWS($aValues[4], 3) = "" Then _AppendDialogError($sErrors, "Routing ID is required for manufactured items.")
+            EndIf
         EndIf
     ElseIf StringInStr($sTitleNorm, "calendar") Then
         If UBound($aValues) > 0 And StringStripWS($aValues[0], 3) = "" Then _AppendDialogError($sErrors, "Calendar ID is required.")
@@ -1616,6 +1732,107 @@ Func _LV_Renumber($hLV)
     For $i = 0 To $nRows - 1
         _GUICtrlListView_SetItemText($hLV, $i, $i + 1, $iLineCol)
     Next
+EndFunc
+
+Func _LV_GetControlFromNotifyHandle($hFrom)
+    Local $aListViews[11] = [$g_hLV_Cal, $g_hLV_Mach, $g_hLV_Ops, $g_hLV_Rout, $g_hLV_Mat, $g_hLV_BOM, $g_hLV_WO, $g_hLV_WOL, $g_hLV_SR, $g_hLV_Cap, $g_hLV_Stk]
+    For $i = 0 To UBound($aListViews) - 1
+        If $aListViews[$i] = 0 Then ContinueLoop
+        If HWnd(GUICtrlGetHandle($aListViews[$i])) = HWnd($hFrom) Then Return $aListViews[$i]
+    Next
+    Return 0
+EndFunc
+
+Func _LV_GetSortStateIndex($hLV)
+    For $i = 0 To UBound($g_aLVSortState, 1) - 1
+        If $g_aLVSortState[$i][0] = $hLV Then Return $i
+    Next
+
+    Local $n = UBound($g_aLVSortState, 1)
+    ReDim $g_aLVSortState[$n + 1][3]
+    $g_aLVSortState[$n][0] = $hLV
+    $g_aLVSortState[$n][1] = -1
+    $g_aLVSortState[$n][2] = False
+    Return $n
+EndFunc
+
+Func _LV_GetRowTextPipe($hLV, $iRow, $nCols)
+    Local $sRow = ""
+    For $c = 0 To $nCols - 1
+        If $c > 0 Then $sRow &= "|"
+        $sRow &= _GUICtrlListView_GetItemText($hLV, $iRow, $c)
+    Next
+    Return $sRow
+EndFunc
+
+Func _LV_MakeSortKey($sValue)
+    Local $s = StringStripWS(String($sValue), 3)
+    If $s = "" Then Return "9|"
+
+    ; Date formats used by the toolbox: dd/mm/yyyy and yyyy-mm-dd
+    Local $aDate = StringRegExp($s, "^([0-9]{1,2})/([0-9]{1,2})/([0-9]{4})$", 1)
+    If IsArray($aDate) Then Return "1|" & StringFormat("%04d%02d%02d", Number($aDate[2]), Number($aDate[1]), Number($aDate[0]))
+
+    $aDate = StringRegExp($s, "^([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})$", 1)
+    If IsArray($aDate) Then Return "1|" & StringFormat("%04d%02d%02d", Number($aDate[0]), Number($aDate[1]), Number($aDate[2]))
+
+    ; Time format: HH:MM or HH:MM:SS
+    Local $aTime = StringRegExp($s, "^([0-9]{1,2}):([0-9]{2})(:([0-9]{2}))?$", 1)
+    If IsArray($aTime) Then
+        Local $iSeconds = (Number($aTime[0]) * 3600) + (Number($aTime[1]) * 60)
+        If UBound($aTime) >= 4 Then $iSeconds += Number($aTime[3])
+        Return "2|" & StringFormat("%08d", $iSeconds)
+    EndIf
+
+    ; Numeric values - avoids lexical problems like 10 being sorted before 2
+    Local $sNum = StringReplace($s, ",", ".")
+    If StringRegExp($sNum, "^-?[0-9]+(\.[0-9]+)?$") Then Return "3|" & StringFormat("%020.6f", Number($sNum) + 1000000000000)
+
+    Return "4|" & StringLower($s)
+EndFunc
+
+Func _LV_SortByColumn($hLV, $iCol)
+    If $hLV = 0 Then Return False
+
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    Local $nCols = _GUICtrlListView_GetColumnCount($hLV)
+    If $nRows < 2 Or $nCols < 1 Then Return False
+    If $iCol < 0 Or $iCol >= $nCols Then Return False
+
+    Local $iState = _LV_GetSortStateIndex($hLV)
+    Local $bDescending = False
+    If $g_aLVSortState[$iState][1] = $iCol Then
+        $bDescending = Not $g_aLVSortState[$iState][2]
+    Else
+        $bDescending = False
+    EndIf
+
+    $g_aLVSortState[$iState][1] = $iCol
+    $g_aLVSortState[$iState][2] = $bDescending
+
+    Local $aRows[$nRows][2]
+    For $i = 0 To $nRows - 1
+        $aRows[$i][0] = _LV_MakeSortKey(_GUICtrlListView_GetItemText($hLV, $i, $iCol)) & "|" & StringFormat("%010d", $i)
+        $aRows[$i][1] = _LV_GetRowTextPipe($hLV, $i, $nCols)
+    Next
+
+    _ArraySort($aRows, Number($bDescending), 0, 0, 0)
+
+    _GUICtrlListView_BeginUpdate($hLV)
+    _GUICtrlListView_DeleteAllItems($hLV)
+    For $i = 0 To $nRows - 1
+        GUICtrlCreateListViewItem($aRows[$i][1], $hLV)
+    Next
+    _LV_Renumber($hLV)
+    _GUICtrlListView_EndUpdate($hLV)
+
+    If $g_lblFooter <> 0 Then
+        Local $sDir = "ascending"
+        If $bDescending Then $sDir = "descending"
+        GUICtrlSetData($g_lblFooter, "Table sorted by column " & ($iCol + 1) & " (" & $sDir & ").")
+    EndIf
+
+    Return True
 EndFunc
 
 ;=============================================================================
@@ -1854,9 +2071,9 @@ Func _Mat_Hints()
         "Item ID exactly as used in Ortems. Spaces are allowed. Example: STD Gearbox", _
         "Human label. Example: Gearbox Standard", _
         "MP = Raw material, SF = Semi-finished, PF = Finished good", _
-        "Version code (00 = standard, STD, SPT, ...). Drives BOM/routing selection", _
+        "Version code for manufactured items (SF/PF). Leave blank for MP raw materials.", _
         "Routing used to produce this item (leave blank for raw materials)", _
-        "Current stock on hand (numeric). Starting inventory for this version"]
+        "Current stock on hand (numeric). Starting inventory for this item/version"]
     Return $a
 EndFunc
 Func _Mat_Add()
@@ -2203,8 +2420,8 @@ EndFunc
 
 Func _LoadExampleStk()
     ; Example: raw material receipts and a semi-finished issue
-    _AddStk("R_Axes",  "", "00",  "15/02/2025",  500)
-    _AddStk("R_Housing", "", "00",  "15/02/2025",  200)
+    _AddStk("R_Axes",  "", "",  "15/02/2025",  500)
+    _AddStk("R_Housing", "", "",  "15/02/2025",  200)
     _AddStk("STD_Axes","STD_AX", "STD", "20/02/2025", -10)
 EndFunc
 
@@ -2228,6 +2445,8 @@ Func _TestConnection()
     EndIf
 
     GUICtrlSetData($g_edtConnStr, $g_sConnStr)
+    _Log("Connection test started for database " & $g_sDatabase & " on server " & $g_sServer)
+    _LogVerbose("Connection string: " & _MaskConnectionString($g_sConnStr))
 
     ; Test the connection via ADO
     Local $oConn = ObjCreate("ADODB.Connection")
@@ -2330,6 +2549,136 @@ Func _OnAuthChange()
 EndFunc
 
 ;=============================================================================
+; UI BUSY MODE / SAFE COMMAND WRAPPERS
+;=============================================================================
+Func _RegisterBusyControl($idCtrl)
+    If $idCtrl = 0 Then Return $idCtrl
+    Local $n = UBound($g_aBusyControls)
+    For $i = 0 To $n - 1
+        If $g_aBusyControls[$i] = $idCtrl Then Return $idCtrl
+    Next
+    ReDim $g_aBusyControls[$n + 1]
+    $g_aBusyControls[$n] = $idCtrl
+    Return $idCtrl
+EndFunc
+
+Func _ForceMainRedraw()
+    If $g_hMain <> 0 Then DllCall("user32.dll", "bool", "RedrawWindow", "hwnd", $g_hMain, "ptr", 0, "ptr", 0, "uint", 0x0185)
+EndFunc
+
+Func _SetBusyControlsEnabled($bEnable)
+    Local $n = UBound($g_aBusyControls)
+    If $n <= 0 Then Return
+
+    If Not $bEnable Then
+        ReDim $g_aBusyStates[$n]
+        For $i = 0 To $n - 1
+            $g_aBusyStates[$i] = GUICtrlGetState($g_aBusyControls[$i])
+            GUICtrlSetState($g_aBusyControls[$i], $GUI_DISABLE)
+        Next
+    Else
+        For $i = 0 To $n - 1
+            If $i < UBound($g_aBusyStates) And BitAND($g_aBusyStates[$i], $GUI_DISABLE) Then
+                GUICtrlSetState($g_aBusyControls[$i], $GUI_DISABLE)
+            Else
+                GUICtrlSetState($g_aBusyControls[$i], $GUI_ENABLE)
+            EndIf
+        Next
+        ReDim $g_aBusyStates[0]
+        _OnAuthChange()
+    EndIf
+EndFunc
+
+Func _SetUIBusy($bBusy, $sLabel = "")
+    If $bBusy Then
+        $g_iBusyDepth += 1
+        If $g_iBusyDepth = 1 Then
+            _LogVerbose("UI controls disabled while executing: " & $sLabel)
+            If $g_hMain <> 0 Then GUISetCursor(15, 1, $g_hMain)
+            If $g_lblFooter <> 0 Then
+                $g_sBusyFooterBackup = GUICtrlRead($g_lblFooter)
+                GUICtrlSetData($g_lblFooter, "Executing: " & $sLabel & " ...")
+            EndIf
+            _SetBusyControlsEnabled(False)
+            _ForceMainRedraw()
+        EndIf
+    Else
+        If $g_iBusyDepth > 0 Then $g_iBusyDepth -= 1
+        If $g_iBusyDepth = 0 Then
+            _SetBusyControlsEnabled(True)
+            If $g_lblFooter <> 0 Then GUICtrlSetData($g_lblFooter, $g_sBusyFooterBackup)
+            If $g_hMain <> 0 Then GUISetCursor(2, 0, $g_hMain)
+            _ForceMainRedraw()
+        EndIf
+    EndIf
+EndFunc
+
+Func _RunWithBusy($sLabel, $sFunction)
+    If $g_iBusyDepth > 0 Then Return
+    _SetUIBusy(True, $sLabel)
+    Local $vResult = Call($sFunction)
+    _SetUIBusy(False, $sLabel)
+    Return $vResult
+EndFunc
+
+Func _TestConnection_Click()
+    _RunWithBusy("Test DB connection", "_TestConnection")
+EndFunc
+
+Func _InspectTable_Click()
+    _RunWithBusy("Inspect table", "_InspectTable")
+EndFunc
+
+Func _ImportExcel_Click()
+    _RunWithBusy("Import workbook", "_ImportExcel")
+EndFunc
+
+Func _ExportExcel_Click()
+    _RunWithBusy("Export workbook", "_ExportExcel")
+EndFunc
+
+Func _LoadFromDB_Click()
+    _RunWithBusy("Load from DB", "_LoadFromDB")
+EndFunc
+
+Func _ClearDatabase_Click()
+    _RunWithBusy("Clear DB", "_ClearDatabase")
+EndFunc
+
+Func _GenerateSQL_Click()
+    _RunWithBusy("Generate SQL", "_GenerateSQL")
+EndFunc
+
+Func _ExecuteSQL_Click()
+    _RunWithBusy("Run SQL on DB", "_ExecuteSQL")
+EndFunc
+
+Func _SaveSQL_Click()
+    _RunWithBusy("Save SQL", "_SaveSQL")
+EndFunc
+
+Func _IntegrityCheck_Click()
+    _RunWithBusy("Integrity validation", "_IntegrityCheck")
+EndFunc
+
+Func _ShowSQLTab()
+    If $g_idTabSQLItem <> 0 Then GUICtrlSetState($g_idTabSQLItem, $GUI_SHOW)
+    If $g_hTabHandle <> 0 Then
+        $g_bAllowProgrammaticTabChange = True
+        _GUICtrlTab_SetCurSel($g_hTabHandle, $g_iTabSQL)
+        $g_bAllowProgrammaticTabChange = False
+    EndIf
+    If $g_hLog <> 0 Then GUICtrlSetState($g_hLog, $GUI_FOCUS)
+    If $g_hMain <> 0 Then DllCall("user32.dll", "bool", "RedrawWindow", "hwnd", $g_hMain, "ptr", 0, "ptr", 0, "uint", 0x0185)
+EndFunc
+
+Func _OnVerboseModeChanged()
+    If IsDeclared("g_chkVerbose") Then $g_bVerbose = (GUICtrlRead($g_chkVerbose) = $GUI_CHECKED)
+    IniWrite($g_sIniFile, "SQL", "Verbose", ($g_bVerbose ? "1" : "0"))
+    _Log("Verbose Mode " & ($g_bVerbose ? "enabled" : "disabled"))
+EndFunc
+
+;=============================================================================
 ; APPLY MODULES
 ;=============================================================================
 Func _ApplyModules()
@@ -2358,7 +2707,7 @@ Func _GenerateSQL()
     ; Clear tables in reverse FK order
     If $bClear Then
         $sSQL &= "-- ===== TABLE CLEANUP =====" & @CRLF
-        $sSQL &= _GetClearSQL() & @CRLF
+        $sSQL &= _GetClearSQLScript() & @CRLF
     EndIf
 
     ; Calendars
@@ -2381,6 +2730,10 @@ Func _GenerateSQL()
     $sSQL &= "-- ===== ITEMS (B_ART / B_VER_ART) =====" & @CRLF
     $sSQL &= _GenerateMatSQL() & @CRLF
 
+    ; Ortems item-version-routing bridge
+    $sSQL &= "-- ===== ITEM VERSION ROUTING BRIDGE (E_GAMME_NOME) =====" & @CRLF
+    $sSQL &= _GenerateEGammeNomeSQL() & @CRLF
+
     ; BOM
     $sSQL &= "-- ===== BOM (B_NOME) =====" & @CRLF
     $sSQL &= _GenerateBOMSQL() & @CRLF
@@ -2388,6 +2741,10 @@ Func _GenerateSQL()
     ; Ordens de Producao
     $sSQL &= "-- ===== WORK ORDERS (B_OF) =====" & @CRLF
     $sSQL &= _GenerateWOSQL() & @CRLF
+
+    ; Ortems requires phase rows for each WO. Without B_BT rows, the application can raise PL_0170.
+    $sSQL &= "-- ===== WORK ORDER PHASES (B_BT) =====" & @CRLF
+    $sSQL &= _GenerateWOBTSQL() & @CRLF
 
     ; WO Links (se modulo ativo)
     If $g_bModWOL Then
@@ -2397,7 +2754,7 @@ Func _GenerateSQL()
 
     If $bTrans Then
         $sSQL &= @CRLF & "COMMIT TRANSACTION;" & @CRLF
-        $sSQL &= "-- Se ocorrer erro, execute: ROLLBACK TRANSACTION;" & @CRLF
+        $sSQL &= "-- If an error occurs, execute ROLLBACK TRANSACTION" & @CRLF
     EndIf
 
     $sSQL &= @CRLF & "-- ===== END OF SCRIPT =====" & @CRLF
@@ -2405,8 +2762,8 @@ Func _GenerateSQL()
     GUICtrlSetData($g_hLog, $sSQL)
     _Log("SQL generated successfully. " & StringLen($sSQL) & " characters.")
 
-    ; Switch to the SQL tab
-    GUICtrlSetState($g_hTab, $g_iTabSQL)
+    ; Switch to the SQL tab and force the tab page to repaint.
+    _ShowSQLTab()
 EndFunc
 
 ;=============================================================================
@@ -2514,6 +2871,202 @@ Func _TimeToSQLLiteral($vTime, $sMode)
     EndSwitch
 EndFunc
 
+Func _SQLQ($sVal)
+    Return "'" & StringReplace(String($sVal), "'", "''") & "'"
+EndFunc
+
+Func _SQLIdent($sName)
+    Return "[" & StringReplace(String($sName), "]", "]]") & "]"
+EndFunc
+
+Func _SQLNum($sVal, $sDefault = "0")
+    Local $s = StringStripWS(String($sVal), 3)
+    If $s = "" Then Return $sDefault
+    $s = StringReplace($s, ",", ".")
+    If Not StringRegExp($s, "^-?\d+(\.\d+)?$") Then Return $sDefault
+    Return $s
+EndFunc
+
+Func _SQLDateTime103($sVal, $sDefault = "01/01/1995 00:00")
+    Local $s = StringStripWS(String($sVal), 3)
+    If $s = "" Then $s = $sDefault
+    Return "CONVERT(datetime," & _SQLQ($s) & ",103)"
+EndFunc
+
+Func _DetectOptionalColumn($sTable, $sRole, $sCandidates)
+    ; For optional fields, do not guess when we are offline. Guessing would generate
+    ; columns that may not exist in the target Ortems schema.
+    If Not $g_bConnected Or $g_sConnStr = "" Then Return ""
+    Return _DetectColumn($sTable, $sRole, $sCandidates & ";__NONE__")
+EndFunc
+
+Func _DetectFKParentColumnByReferenced($sParentTable, $sReferencedTable, $sReferencedColumn, $sRole)
+    If Not $g_bConnected Or $g_sConnStr = "" Then Return ""
+
+    Local $oConn = ObjCreate("ADODB.Connection")
+    If Not IsObj($oConn) Then Return ""
+
+    $g_sLastComError = ""
+    $oConn.Open($g_sConnStr)
+    If $g_sLastComError <> "" Or $oConn.State <> 1 Then Return ""
+
+    Local $sParentSafe = StringReplace($sParentTable, "'", "''")
+    Local $sReferencedSafe = StringReplace($sReferencedTable, "'", "''")
+    Local $sRefColSafe = StringReplace($sReferencedColumn, "'", "''")
+
+    $g_sLastComError = ""
+    Local $oRS = $oConn.Execute( _
+        "SELECT TOP 1 pc.name " & _
+        "FROM sys.foreign_key_columns fkc " & _
+        "INNER JOIN sys.columns pc ON pc.object_id=fkc.parent_object_id AND pc.column_id=fkc.parent_column_id " & _
+        "INNER JOIN sys.columns rc ON rc.object_id=fkc.referenced_object_id AND rc.column_id=fkc.referenced_column_id " & _
+        "INNER JOIN sys.foreign_keys fk ON fk.object_id=fkc.constraint_object_id " & _
+        "WHERE OBJECT_NAME(fkc.parent_object_id)='" & $sParentSafe & "' " & _
+        "AND OBJECT_NAME(fkc.referenced_object_id)='" & $sReferencedSafe & "' " & _
+        "AND UPPER(rc.name)=UPPER('" & $sRefColSafe & "') " & _
+        "ORDER BY CASE WHEN fk.name='FK2_B_PART' THEN 0 ELSE 1 END, pc.column_id")
+
+    Local $sFound = ""
+    If $g_sLastComError = "" And IsObj($oRS) Then
+        If Not $oRS.EOF Then $sFound = $oRS.Fields(0).Value
+        $oRS.Close()
+    EndIf
+
+    $oConn.Close()
+
+    If $sFound <> "" Then
+        _Log($sParentTable & " schema: FK to " & $sReferencedTable & " maps referenced column '" & $sReferencedColumn & "' to parent column '" & $sFound & "' for " & $sRole)
+    Else
+        _Log($sParentTable & " schema: no FK parent column detected for " & $sRole & " through " & $sReferencedTable & "." & $sReferencedColumn)
+    EndIf
+
+    Return $sFound
+EndFunc
+
+Func _ColumnIfPresent(ByRef $sColList, ByRef $sValList, $sCol, $sVal)
+    If $sCol = "" Then Return
+    $sColList &= ", " & $sCol
+    $sValList &= ", " & $sVal
+EndFunc
+
+Func _BaseTableExists($sTable)
+    If Not $g_bConnected Or $g_sConnStr = "" Then Return False
+
+    Local $oConn = ObjCreate("ADODB.Connection")
+    If Not IsObj($oConn) Then Return False
+
+    $g_sLastComError = ""
+    $oConn.Open($g_sConnStr)
+    If $g_sLastComError <> "" Or $oConn.State <> 1 Then Return False
+
+    Local $sSafeTable = StringReplace($sTable, "'", "''")
+    Local $oRS = $oConn.Execute("SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='" & $sSafeTable & "' AND TABLE_TYPE='BASE TABLE'")
+    Local $bExists = False
+    If $g_sLastComError = "" And IsObj($oRS) Then
+        $bExists = (Number($oRS.Fields(0).Value) > 0)
+        $oRS.Close()
+    EndIf
+
+    $oConn.Close()
+    Return $bExists
+EndFunc
+
+
+Func _GetTableColumnsForLog($sTable)
+    ; Returns the actual columns for a table in a compact string used by verbose logs.
+    ; This is useful when an Ortems schema uses version-specific column names.
+    If Not $g_bConnected Or $g_sConnStr = "" Then Return ""
+
+    Local $oConn = ObjCreate("ADODB.Connection")
+    If Not IsObj($oConn) Then Return ""
+
+    $g_sLastComError = ""
+    $oConn.Open($g_sConnStr)
+    If $g_sLastComError <> "" Or $oConn.State <> 1 Then Return ""
+
+    Local $sSafeTable = StringReplace($sTable, "'", "''")
+    $g_sLastComError = ""
+    Local $oRS = $oConn.Execute( _
+        "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS " & _
+        "WHERE TABLE_NAME='" & $sSafeTable & "' ORDER BY ORDINAL_POSITION")
+
+    Local $sCols = ""
+    If $g_sLastComError = "" And IsObj($oRS) Then
+        While Not $oRS.EOF
+            If $sCols <> "" Then $sCols &= ", "
+            $sCols &= $oRS.Fields(0).Value
+            $oRS.MoveNext()
+        WEnd
+        $oRS.Close()
+    EndIf
+
+    $oConn.Close()
+    Return $sCols
+EndFunc
+
+Func _DetectRequiredColumn($sTable, $sRole, $sCandidates)
+    ; Same detection logic as optional columns, but with a clearer warning when the
+    ; field is required to build a safe INSERT/WHERE condition.
+    Local $sFound = _DetectOptionalColumn($sTable, $sRole, $sCandidates)
+    If $sFound = "" Then
+        Local $sActualCols = _GetTableColumnsForLog($sTable)
+        _Log("WARNING: Required column for " & $sTable & "." & $sRole & " was not detected. Candidates tried: " & $sCandidates)
+        If $sActualCols <> "" Then _Log($sTable & " actual columns: " & $sActualCols)
+    EndIf
+    Return $sFound
+EndFunc
+
+Func _AppendColumnValue(ByRef $sColList, ByRef $sValList, $sCol, $sVal)
+    ; Uses SQL Server quoted identifiers so schema-specific column names remain safe.
+    If $sCol = "" Then Return
+    $sColList &= ", " & _SQLIdent($sCol)
+    $sValList &= ", " & $sVal
+EndFunc
+
+Func _AppendWhereEquals(ByRef $sWhere, $sCol, $sVal)
+    If $sCol = "" Then Return
+    If $sWhere <> "" Then $sWhere &= " AND "
+    $sWhere &= _SQLIdent($sCol) & "=" & $sVal
+EndFunc
+
+Func _LookupItemType($sItemID)
+    Local $sNeedle = StringLower(StringStripWS($sItemID, 3))
+    If $sNeedle = "" Then Return ""
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Mat)
+    For $i = 0 To $nRows - 1
+        Local $sRowItem = StringLower(StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 0), 3))
+        If $sRowItem = $sNeedle Then Return StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 2), 3)
+    Next
+    Return ""
+EndFunc
+
+Func _ItemIsRawMaterial($sItemID)
+    Return _IsRawMaterialType(_LookupItemType($sItemID))
+EndFunc
+
+Func _LookupUniqueMachineByOperation($sOperation)
+    Local $sOpNorm = StringLower(StringStripWS($sOperation, 3))
+    If $sOpNorm = "" Then Return ""
+
+    Local $sFound = ""
+    Local $sSeen = ";"
+    Local $nUnique = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Ops)
+
+    For $i = 0 To $nRows - 1
+        Local $sRowOp = StringLower(StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Ops, $i, 0), 3))
+        If $sRowOp <> $sOpNorm Then ContinueLoop
+        Local $sMachine = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Ops, $i, 3), 3)
+        If $sMachine = "" Or _IsStandByMachine($sMachine) Then ContinueLoop
+        If StringInStr($sSeen, ";" & $sMachine & ";") Then ContinueLoop
+        $sSeen &= $sMachine & ";"
+        $nUnique += 1
+        $sFound = $sMachine
+        If $nUnique > 1 Then Return ""
+    Next
+    Return $sFound
+EndFunc
+
 Func _GenerateCalSQL()
     Local $s = ""
     Local $sTimeMode = _InferBPeriTimeMode()
@@ -2602,37 +3155,203 @@ Func _GenerateRoutSQL()
     Local $s = ""
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Rout)
     For $i = 0 To $nRows - 1
-        Local $sID   = _GUICtrlListView_GetItemText($g_hLV_Rout, $i, 0)
-        Local $sNome = _GUICtrlListView_GetItemText($g_hLV_Rout, $i, 1)
-        Local $nFase = _GUICtrlListView_GetItemText($g_hLV_Rout, $i, 2)
-        Local $sOp   = _GUICtrlListView_GetItemText($g_hLV_Rout, $i, 3)
-        Local $sNomF = _GUICtrlListView_GetItemText($g_hLV_Rout, $i, 4)
+        Local $sID   = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Rout, $i, 0), 3)
+        Local $sNome = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Rout, $i, 1), 3)
+        Local $nFase = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_Rout, $i, 2), "0")
+        Local $sOp   = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Rout, $i, 3), 3)
+        Local $sNomF = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Rout, $i, 4), 3)
 
-        $s &= "IF NOT EXISTS (SELECT 1 FROM B_GAMM WHERE NOMG='" & $sID & "')" & @CRLF
-        $s &= "    INSERT INTO B_GAMM (NOMG, LIBGAM) VALUES ('" & $sID & "', '" & $sNome & "');" & @CRLF
-        $s &= "IF NOT EXISTS (SELECT 1 FROM B_PHAS WHERE NOMG='" & $sID & "' AND NOPHASE=" & $nFase & ")" & @CRLF
-        $s &= "    INSERT INTO B_PHAS (NOMG, NOPHASE, OPE, LIBPHASE) VALUES ('" & $sID & "', " & $nFase & ", '" & $sOp & "', '" & $sNomF & "');" & @CRLF
+        ; Upsert routing headers and phases. Existing demo databases may already
+        ; contain a routing with different phase details, so the Toolbox must
+        ; refresh the phase rows before B_VER_ART points an item version to them.
+        $s &= "IF EXISTS (SELECT 1 FROM B_GAMM WHERE NOMG=" & _SQLQ($sID) & ")" & @CRLF
+        $s &= "    UPDATE B_GAMM SET LIBGAM=" & _SQLQ($sNome) & " WHERE NOMG=" & _SQLQ($sID) & @CRLF
+        $s &= "ELSE" & @CRLF
+        $s &= "    INSERT INTO B_GAMM (NOMG, LIBGAM) VALUES (" & _SQLQ($sID) & ", " & _SQLQ($sNome) & ");" & @CRLF
+
+        $s &= "IF EXISTS (SELECT 1 FROM B_PHAS WHERE NOMG=" & _SQLQ($sID) & " AND NOPHASE=" & $nFase & ")" & @CRLF
+        $s &= "    UPDATE B_PHAS SET OPE=" & _SQLQ($sOp) & ", LIBPHASE=" & _SQLQ($sNomF) & " WHERE NOMG=" & _SQLQ($sID) & " AND NOPHASE=" & $nFase & @CRLF
+        $s &= "ELSE" & @CRLF
+        $s &= "    INSERT INTO B_PHAS (NOMG, NOPHASE, OPE, LIBPHASE) VALUES (" & _SQLQ($sID) & ", " & $nFase & ", " & _SQLQ($sOp) & ", " & _SQLQ($sNomF) & ");" & @CRLF
     Next
+    Return $s
+EndFunc
+
+Func _GetFirstRoutingPhase($sRouting)
+    Local $sTarget = StringStripWS(String($sRouting), 3)
+    Local $sFirst = ""
+    Local $nFirst = 999999999
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Rout)
+    For $i = 0 To $nRows - 1
+        Local $sID = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Rout, $i, 0), 3)
+        If $sID <> $sTarget Then ContinueLoop
+        Local $sPhase = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_Rout, $i, 2), "0")
+        Local $nPhase = Number($sPhase)
+        If $sFirst = "" Or $nPhase < $nFirst Then
+            $sFirst = $sPhase
+            $nFirst = $nPhase
+        EndIf
+    Next
+    Return $sFirst
+EndFunc
+
+Func _GetRoutingOperationForPhase($sRouting, $sPhase)
+    Local $sTargetRouting = StringStripWS(String($sRouting), 3)
+    Local $sTargetPhase = String(Number(_SQLNum($sPhase, "0")))
+    If $sTargetRouting = "" Or $sTargetPhase = "" Then Return ""
+
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Rout)
+    For $i = 0 To $nRows - 1
+        Local $sID = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Rout, $i, 0), 3)
+        If $sID <> $sTargetRouting Then ContinueLoop
+
+        Local $sRowPhase = String(Number(_SQLNum(_GUICtrlListView_GetItemText($g_hLV_Rout, $i, 2), "0")))
+        If $sRowPhase <> $sTargetPhase Then ContinueLoop
+
+        Return StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Rout, $i, 3), 3)
+    Next
+    Return ""
+EndFunc
+
+Func _GenerateItemVersionDependencyCleanupSQL($sID, $sVer)
+    ; The original Ortems Toolbox Excel clears B_PART/B_PARTC/I_PART/I_PARTC before B_VER_ART.
+    ; Those parameter tables can keep old routing/phase references for an existing item version.
+    ; If B_VER_ART.NOMG is changed while those rows still point to an old phase, SQL Server can
+    ; raise FK2_B_PART against B_PHAS during the B_VER_ART update. Clean only the impacted item
+    ; version, and only when the tables/columns exist in the target schema.
+    If StringStripWS(String($sID), 3) = "" Or StringStripWS(String($sVer), 3) = "" Then Return ""
+
+    Local $s = ""
+    $s &= "IF OBJECT_ID(N'[dbo].[I_PARTC]', N'U') IS NOT NULL AND COL_LENGTH('dbo.I_PARTC','CODEARTIC') IS NOT NULL AND COL_LENGTH('dbo.I_PARTC','VER_ART') IS NOT NULL" & @CRLF
+    $s &= "    DELETE FROM I_PARTC WHERE CODEARTIC=" & _SQLQ($sID) & " AND VER_ART=" & _SQLQ($sVer) & ";" & @CRLF
+    $s &= "IF OBJECT_ID(N'[dbo].[I_PART]', N'U') IS NOT NULL AND COL_LENGTH('dbo.I_PART','CODEARTIC') IS NOT NULL AND COL_LENGTH('dbo.I_PART','VER_ART') IS NOT NULL" & @CRLF
+    $s &= "    DELETE FROM I_PART WHERE CODEARTIC=" & _SQLQ($sID) & " AND VER_ART=" & _SQLQ($sVer) & ";" & @CRLF
+    $s &= "IF OBJECT_ID(N'[dbo].[B_PARTC]', N'U') IS NOT NULL AND COL_LENGTH('dbo.B_PARTC','CODEARTIC') IS NOT NULL AND COL_LENGTH('dbo.B_PARTC','VER_ART') IS NOT NULL" & @CRLF
+    $s &= "    DELETE FROM B_PARTC WHERE CODEARTIC=" & _SQLQ($sID) & " AND VER_ART=" & _SQLQ($sVer) & ";" & @CRLF
+    $s &= "IF OBJECT_ID(N'[dbo].[B_PART]', N'U') IS NOT NULL AND COL_LENGTH('dbo.B_PART','CODEARTIC') IS NOT NULL AND COL_LENGTH('dbo.B_PART','VER_ART') IS NOT NULL" & @CRLF
+    $s &= "    DELETE FROM B_PART WHERE CODEARTIC=" & _SQLQ($sID) & " AND VER_ART=" & _SQLQ($sVer) & ";" & @CRLF
     Return $s
 EndFunc
 
 Func _GenerateMatSQL()
     Local $s = ""
+    Local $sVerArtPhaseCol = _DetectOptionalColumn("B_VER_ART", "routing_phase", "NOPHASE;NO_PHASE;PHASE;NO_PHAS;B_V_NOPHASE;B_NOPHASE;NPHASE;NUMPHASE;PHASE_DEFAUT")
+    If $sVerArtPhaseCol = "" Then $sVerArtPhaseCol = _DetectFKParentColumnByReferenced("B_VER_ART", "B_PHAS", "NOPHASE", "routing_phase")
+
+    ; Some Ortems schemas do not use an obvious phase column name in B_VER_ART.
+    ; The reliable source is the SQL Server FK mapping to B_PHAS. If FK2_B_PART
+    ; also maps an operation/code column, update it together with the routing and
+    ; phase to avoid carrying an old routing-phase combination.
+    Local $sVerArtRoutCol = _DetectFKParentColumnByReferenced("B_VER_ART", "B_PHAS", "NOMG", "routing_id")
+    Local $sVerArtOpCol = _DetectFKParentColumnByReferenced("B_VER_ART", "B_PHAS", "OPE", "routing_operation")
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Mat)
     For $i = 0 To $nRows - 1
-        Local $sID   = _GUICtrlListView_GetItemText($g_hLV_Mat, $i, 0)
-        Local $sNome = _GUICtrlListView_GetItemText($g_hLV_Mat, $i, 1)
-        Local $sTipo = _GUICtrlListView_GetItemText($g_hLV_Mat, $i, 2)
-        Local $sVer  = _GUICtrlListView_GetItemText($g_hLV_Mat, $i, 3)
-        Local $sRot  = _GUICtrlListView_GetItemText($g_hLV_Mat, $i, 4)
-        Local $nStk  = _GUICtrlListView_GetItemText($g_hLV_Mat, $i, 5)
+        Local $sID   = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 0), 3)
+        Local $sNome = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 1), 3)
+        Local $sTipo = StringUpper(StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 2), 3))
+        Local $sVer  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 3), 3)
+        Local $sRot  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 4), 3)
+        Local $nStk  = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 5), "0")
+        Local $sFirstPhase = _GetFirstRoutingPhase($sRot)
+        Local $sFirstOp = _GetRoutingOperationForPhase($sRot, $sFirstPhase)
 
-        $s &= "IF NOT EXISTS (SELECT 1 FROM B_ART WHERE CODEARTIC='" & $sID & "')" & @CRLF
-        $s &= "    INSERT INTO B_ART (CODEARTIC, LIBARTIC, TYPEMATI, QTE_STOCK) VALUES ('" & $sID & "', '" & $sNome & "', '" & $sTipo & "', " & $nStk & ");" & @CRLF
-        $s &= "IF NOT EXISTS (SELECT 1 FROM B_VER_ART WHERE CODEARTIC='" & $sID & "' AND VER_ART='" & $sVer & "')" & @CRLF
-        $s &= "    INSERT INTO B_VER_ART (CODEARTIC, VER_ART, VER_DESC, NOMG, VER_EFFET_DEBUT, VER_EFFET_FIN)" & @CRLF
-        $s &= "    VALUES ('" & $sID & "', '" & $sVer & "', '" & $sNome & "', '" & $sRot & "', CONVERT(datetime,'01/01/1995',103), CONVERT(datetime,'01/01/2050',103));" & @CRLF
+        ; Upsert the item header. The Toolbox is frequently used to refresh/customize
+        ; an existing demo database, so an existing row must be updated, not ignored.
+        $s &= "IF EXISTS (SELECT 1 FROM B_ART WHERE CODEARTIC=" & _SQLQ($sID) & ")" & @CRLF
+        $s &= "    UPDATE B_ART SET LIBARTIC=" & _SQLQ($sNome) & ", TYPEMATI=" & _SQLQ($sTipo) & ", QTE_STOCK=" & $nStk & " WHERE CODEARTIC=" & _SQLQ($sID) & @CRLF
+        $s &= "ELSE" & @CRLF
+        $s &= "    INSERT INTO B_ART (CODEARTIC, LIBARTIC, TYPEMATI, QTE_STOCK) VALUES (" & _SQLQ($sID) & ", " & _SQLQ($sNome) & ", " & _SQLQ($sTipo) & ", " & $nStk & ");" & @CRLF
+
+        If _IsRawMaterialType($sTipo) Then
+            $s &= "-- MP raw material " & _SQLQ($sID) & ": B_VER_ART intentionally skipped because MP items do not require version or routing" & @CRLF
+            ContinueLoop
+        EndIf
+
+        ; Remove stale parameter/phase links for this item version before touching B_VER_ART.
+        ; This mirrors the original Excel Toolbox cleanup order for B_PART/B_PARTC and prevents
+        ; FK2_B_PART from keeping an old routing/phase combination alive during the update.
+        $s &= _GenerateItemVersionDependencyCleanupSQL($sID, $sVer)
+
+        ; Upsert the item version/routing. This is critical when an existing item
+        ; version is being reassigned to another routing, for example PINION 4G / 00
+        ; from PINION to PINION ALTERNATE. Some Ortems SQL Server schemas also keep
+        ; a phase reference in B_VER_ART, so update that phase together with NOMG.
+        ; Otherwise SQL Server may reject the update because NOMG + old phase no
+        ; longer exists in B_PHAS for the new routing.
+        Local $sRoutUpdate = ""
+        Local $sRoutInsertCol = ""
+        Local $sRoutInsertVal = ""
+        If $sVerArtRoutCol <> "" And StringUpper($sVerArtRoutCol) <> "NOMG" Then
+            $sRoutUpdate = ", " & _SQLIdent($sVerArtRoutCol) & "=" & _SQLQ($sRot)
+            $sRoutInsertCol = ", " & _SQLIdent($sVerArtRoutCol)
+            $sRoutInsertVal = ", " & _SQLQ($sRot)
+        EndIf
+
+        Local $sPhaseUpdate = ""
+        Local $sPhaseInsertCol = ""
+        Local $sPhaseInsertVal = ""
+        If $sVerArtPhaseCol <> "" And $sFirstPhase <> "" And StringUpper($sVerArtPhaseCol) <> "NOMG" And StringUpper($sVerArtPhaseCol) <> StringUpper($sVerArtRoutCol) Then
+            $sPhaseUpdate = ", " & _SQLIdent($sVerArtPhaseCol) & "=" & $sFirstPhase
+            $sPhaseInsertCol = ", " & _SQLIdent($sVerArtPhaseCol)
+            $sPhaseInsertVal = ", " & $sFirstPhase
+        EndIf
+
+        Local $sOpUpdate = ""
+        Local $sOpInsertCol = ""
+        Local $sOpInsertVal = ""
+        If $sVerArtOpCol <> "" And $sFirstOp <> "" And StringUpper($sVerArtOpCol) <> "NOMG" And StringUpper($sVerArtOpCol) <> StringUpper($sVerArtRoutCol) And StringUpper($sVerArtOpCol) <> StringUpper($sVerArtPhaseCol) Then
+            $sOpUpdate = ", " & _SQLIdent($sVerArtOpCol) & "=" & _SQLQ($sFirstOp)
+            $sOpInsertCol = ", " & _SQLIdent($sVerArtOpCol)
+            $sOpInsertVal = ", " & _SQLQ($sFirstOp)
+        EndIf
+
+        $s &= "IF EXISTS (SELECT 1 FROM B_VER_ART WHERE CODEARTIC=" & _SQLQ($sID) & " AND VER_ART=" & _SQLQ($sVer) & ")" & @CRLF
+        $s &= "    UPDATE B_VER_ART SET VER_DESC=" & _SQLQ($sNome) & ", NOMG=" & _SQLQ($sRot) & $sRoutUpdate & $sPhaseUpdate & $sOpUpdate & ", VER_EFFET_DEBUT=CONVERT(datetime,'01/01/1995',103), VER_EFFET_FIN=CONVERT(datetime,'01/01/2050',103) WHERE CODEARTIC=" & _SQLQ($sID) & " AND VER_ART=" & _SQLQ($sVer) & @CRLF
+        $s &= "ELSE" & @CRLF
+        $s &= "    INSERT INTO B_VER_ART (CODEARTIC, VER_ART, VER_DESC, NOMG" & $sRoutInsertCol & $sPhaseInsertCol & $sOpInsertCol & ", VER_EFFET_DEBUT, VER_EFFET_FIN)" & @CRLF
+        $s &= "    VALUES (" & _SQLQ($sID) & ", " & _SQLQ($sVer) & ", " & _SQLQ($sNome) & ", " & _SQLQ($sRot) & $sRoutInsertVal & $sPhaseInsertVal & $sOpInsertVal & ", CONVERT(datetime,'01/01/1995',103), CONVERT(datetime,'01/01/2050',103));" & @CRLF
     Next
+    Return $s
+EndFunc
+
+Func _GenerateEGammeNomeSQL()
+    ; Some Ortems SQL Server schemas validate B_NOME against E_GAMME_NOME
+    ; using the parent item + version + routing. Populate this bridge explicitly
+    ; before inserting BOM rows.
+    If Not _BaseTableExists("E_GAMME_NOME") Then
+        _Log("E_GAMME_NOME table not found in this schema - explicit bridge generation skipped.")
+        Return ""
+    EndIf
+
+    Local $sItemCol = _DetectOptionalColumn("E_GAMME_NOME", "item",    "CODEARTIC;B_V_CODEARTIC;B_CODEARTIC;ARTICLE")
+    Local $sVerCol  = _DetectOptionalColumn("E_GAMME_NOME", "version", "VER_ART;B_VER_ART;VERSION")
+    Local $sRoutCol = _DetectOptionalColumn("E_GAMME_NOME", "routing", "NOMG;NOM_GAMME;GAMME")
+
+    If $sItemCol = "" Or $sVerCol = "" Or $sRoutCol = "" Then
+        _Log("WARNING: E_GAMME_NOME exists, but required item/version/routing columns were not detected. Bridge generation skipped.")
+        Return "-- WARNING: E_GAMME_NOME bridge generation skipped because required columns were not detected" & @CRLF
+    EndIf
+
+    Local $s = ""
+    Local $sSeen = ";"
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Mat)
+    For $i = 0 To $nRows - 1
+        Local $sID   = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 0), 3)
+        Local $sTipo = StringUpper(StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 2), 3))
+        Local $sVer  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 3), 3)
+        Local $sRot  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 4), 3)
+
+        If $sID = "" Or $sVer = "" Or $sRot = "" Then ContinueLoop
+        If _IsRawMaterialType($sTipo) Then ContinueLoop
+
+        Local $sKey = StringLower($sID & "|" & $sVer & "|" & $sRot)
+        If StringInStr($sSeen, ";" & $sKey & ";") Then ContinueLoop
+        $sSeen &= $sKey & ";"
+
+        $s &= "IF NOT EXISTS (SELECT 1 FROM E_GAMME_NOME WHERE " & _SQLIdent($sItemCol) & "=" & _SQLQ($sID) & " AND " & _SQLIdent($sVerCol) & "=" & _SQLQ($sVer) & " AND " & _SQLIdent($sRoutCol) & "=" & _SQLQ($sRot) & ")" & @CRLF
+        $s &= "    INSERT INTO E_GAMME_NOME (" & _SQLIdent($sItemCol) & ", " & _SQLIdent($sVerCol) & ", " & _SQLIdent($sRoutCol) & ") VALUES (" & _SQLQ($sID) & ", " & _SQLQ($sVer) & ", " & _SQLQ($sRot) & ");" & @CRLF
+    Next
+
     Return $s
 EndFunc
 
@@ -2645,17 +3364,17 @@ Func _GenerateBOMSQL()
     Local $s = ""
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_BOM)
     For $i = 0 To $nRows - 1
-        Local $sPaiID  = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 0)
-        Local $sVPai   = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 1)
-        Local $sCompID = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 2)
-        Local $sRotID  = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 3)
-        Local $nFase   = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 4)
-        Local $nQRef   = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 5)
-        Local $nQNec   = _GUICtrlListView_GetItemText($g_hLV_BOM, $i, 6)
+        Local $sPaiID  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_BOM, $i, 0), 3)
+        Local $sVPai   = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_BOM, $i, 1), 3)
+        Local $sCompID = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_BOM, $i, 2), 3)
+        Local $sRotID  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_BOM, $i, 3), 3)
+        Local $nFase   = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_BOM, $i, 4), "0")
+        Local $nQRef   = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_BOM, $i, 5), "1")
+        Local $nQNec   = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_BOM, $i, 6), "1")
 
-        $s &= "IF NOT EXISTS (SELECT 1 FROM B_NOME WHERE B_V_CODEARTIC='" & $sPaiID & "' AND VER_ART='" & $sVPai & "' AND CODEARTIC='" & $sCompID & "' AND NOMG='" & $sRotID & "' AND NOPHASE=" & $nFase & ")" & @CRLF
+        $s &= "IF NOT EXISTS (SELECT 1 FROM B_NOME WHERE B_V_CODEARTIC=" & _SQLQ($sPaiID) & " AND VER_ART=" & _SQLQ($sVPai) & " AND CODEARTIC=" & _SQLQ($sCompID) & " AND NOMG=" & _SQLQ($sRotID) & " AND NOPHASE=" & $nFase & ")" & @CRLF
         $s &= "    INSERT INTO B_NOME (B_V_CODEARTIC, VER_ART, CODEARTIC, NOMG, NOPHASE, " & $sQtyBase & ", " & $sQtyNec & ")" & @CRLF
-        $s &= "    VALUES ('" & $sPaiID & "', '" & $sVPai & "', '" & $sCompID & "', '" & $sRotID & "', " & $nFase & ", " & $nQRef & ", " & $nQNec & ");" & @CRLF
+        $s &= "    VALUES (" & _SQLQ($sPaiID) & ", " & _SQLQ($sVPai) & ", " & _SQLQ($sCompID) & ", " & _SQLQ($sRotID) & ", " & $nFase & ", " & $nQRef & ", " & $nQNec & ");" & @CRLF
     Next
     Return $s
 EndFunc
@@ -2687,10 +3406,11 @@ Func _DetectColumn($sTable, $sRole, $sCandidates)
             $sActual &= ";" & $oRS.Fields(0).Value
             $oRS.MoveNext()
         WEnd
+        $sActual &= ";"
         $oRS.Close()
         For $i = 1 To $aCands[0]
             If $aCands[$i] = "__NONE__" Then ContinueLoop   ; sentinel - skip
-            If StringInStr($sActual, ";" & $aCands[$i]) Then
+            If StringInStr($sActual, ";" & $aCands[$i] & ";") Then
                 $sFound = $aCands[$i]
                 _Log($sTable & " schema: column '" & $sFound & "' used for " & $sRole)
                 ExitLoop
@@ -2724,23 +3444,23 @@ Func _GenerateWOSQL()
     Local $sQteCol = _DetectColumn("B_OF", "qty_order", "QTE;QTEORDER;QTEOF;QTE_ORDER;QTEOFORDER;QTECMD")
 
     ; MODE_UTIL exists in some Ortems versions but not all
-    Local $sModeUtil = _DetectColumn("B_OF", "mode_util", "MODE_UTIL;MODE_GESTION;MODUTIL;__NONE__")
-    Local $bHasModeUtil = ($sModeUtil <> "__NONE__" And $sModeUtil <> "")
+    Local $sModeUtil = _DetectOptionalColumn("B_OF", "mode_util", "MODE_UTIL;MODE_GESTION;MODUTIL")
+    Local $bHasModeUtil = ($sModeUtil <> "")
 
     Local $s = ""
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_WO)
     For $i = 0 To $nRows - 1
-        Local $sNum  = _GUICtrlListView_GetItemText($g_hLV_WO, $i, 0)
-        Local $sMat  = _GUICtrlListView_GetItemText($g_hLV_WO, $i, 1)
-        Local $sRot  = _GUICtrlListView_GetItemText($g_hLV_WO, $i, 2)
-        Local $sVer  = _GUICtrlListView_GetItemText($g_hLV_WO, $i, 3)
-        Local $nQtd  = _GUICtrlListView_GetItemText($g_hLV_WO, $i, 4)
-        Local $sDtI  = _GUICtrlListView_GetItemText($g_hLV_WO, $i, 5)
-        Local $sDtF  = _GUICtrlListView_GetItemText($g_hLV_WO, $i, 6)
+        Local $sNum  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 0), 3)
+        Local $sMat  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 1), 3)
+        Local $sRot  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 2), 3)
+        Local $sVer  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 3), 3)
+        Local $nQtd  = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 4), "0")
+        Local $sDtI  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 5), 3)
+        Local $sDtF  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 6), 3)
 
         Local $sColList = "NOF, CODEARTIC, NOMG, SERIE, VER_ART, " & $sQteCol & ", DPLUSTOT, FPLUSTARD, CODEGEST, ETATOF, VER_EFFET_DEBUT, VER_EFFET_FIN"
-        Local $sValList = "'" & $sNum & "', '" & $sMat & "', '" & $sRot & "', '0', '" & $sVer & "', " & $nQtd & ", " & _
-            "CONVERT(datetime, '" & $sDtI & "', 103), CONVERT(datetime, '" & $sDtF & "', 103), " & _
+        Local $sValList = _SQLQ($sNum) & ", " & _SQLQ($sMat) & ", " & _SQLQ($sRot) & ", '0', " & _SQLQ($sVer) & ", " & $nQtd & ", " & _
+            _SQLDateTime103($sDtI, "01/01/1995 00:00") & ", " & _SQLDateTime103($sDtF, "01/01/2050 23:59") & ", " & _
             "'F', 'S', CONVERT(datetime,'01/01/1995',103), CONVERT(datetime,'01/01/2050',103)"
 
         If $bHasModeUtil Then
@@ -2748,34 +3468,115 @@ Func _GenerateWOSQL()
             $sValList &= ", 'C'"
         EndIf
 
-        $s &= "IF NOT EXISTS (SELECT 1 FROM B_OF WHERE NOF='" & $sNum & "')" & @CRLF
+        $s &= "IF NOT EXISTS (SELECT 1 FROM B_OF WHERE NOF=" & _SQLQ($sNum) & ")" & @CRLF
         $s &= "    INSERT INTO B_OF (" & $sColList & ")" & @CRLF
         $s &= "    VALUES (" & $sValList & ");" & @CRLF
     Next
     Return $s
 EndFunc
 
+Func _GenerateWOBTSQL()
+    ; PL_0170 in Ortems is commonly raised when a WO exists without phase rows.
+    ; The B_BT schema is not identical across Ortems versions, so do not assume
+    ; NOF/NOMG/NOPHASE are the physical column names. Detect them before generating SQL.
+    Local $sWOCol      = _DetectOptionalColumn("B_BT", "work_order", "NOF;BT_NOF;B_NOF;B_O_NOF;O_NOF;NO_OF;N_OF;NUMOF;NUM_OF;OF;ID_OF;BT_OF")
+    If $sWOCol = "" Then $sWOCol = _DetectFKParentColumnByReferenced("B_BT", "B_OF", "NOF", "work_order")
 
+    Local $sRoutCol    = _DetectOptionalColumn("B_BT", "routing",    "NOMG;BT_NOMG;B_NOMG;B_P_NOMG;NOM_GAMME;NOGAMME;NO_GAMME;GAMME;ROUTING")
+    If $sRoutCol = "" Then $sRoutCol = _DetectFKParentColumnByReferenced("B_BT", "B_PHAS", "NOMG", "routing")
+
+    Local $sPhaseCol   = _DetectOptionalColumn("B_BT", "phase",      "NOPHASE;BT_NOPHASE;B_NOPHASE;B_P_NOPHASE;NO_PHASE;NO_PHAS;PHASE;NPHASE;NUMPHASE;NUM_PHASE")
+    If $sPhaseCol = "" Then $sPhaseCol = _DetectFKParentColumnByReferenced("B_BT", "B_PHAS", "NOPHASE", "phase")
+
+    Local $sOpeCol     = _DetectOptionalColumn("B_BT", "operation",  "OPE;CODEOPE;BT_OPE")
+    Local $sMachCol    = _DetectOptionalColumn("B_BT", "machine",    "MACHINE;MACH;BT_MACHINE")
+    Local $sItemCol    = _DetectOptionalColumn("B_BT", "item",       "CODEARTIC;B_CODEARTIC;BT_CODEARTIC")
+    Local $sVerCol     = _DetectOptionalColumn("B_BT", "version",    "VER_ART;B_VER_ART;BT_VER_ART")
+    Local $sSerieCol   = _DetectOptionalColumn("B_BT", "serie",      "SERIE;BT_SERIE")
+    Local $sQtyCol     = _DetectOptionalColumn("B_BT", "qty",        "QTE;QTEOF;QTEBT;BT_QTE;QTE_ORDER")
+    Local $sStartCol   = _DetectOptionalColumn("B_BT", "start_date", "DPLUSTOT;DATEDEB;DATDEB;BT_DEBUT;DEBUT")
+    Local $sEndCol     = _DetectOptionalColumn("B_BT", "end_date",   "FPLUSTARD;DATEFIN;DATFIN;BT_FIN;FIN")
+    Local $sGestCol    = _DetectOptionalColumn("B_BT", "codegest",   "CODEGEST;BT_CODEGEST")
+    Local $sStatusCol  = _DetectOptionalColumn("B_BT", "status",     "ETATBT;ETAT;BT_ETAT")
+    Local $sModeCol    = _DetectOptionalColumn("B_BT", "mode_util",  "MODE_UTIL;MODE_GESTION;MODUTIL")
+
+    Local $s = ""
+
+    If $sWOCol = "" Or $sRoutCol = "" Or $sPhaseCol = "" Then
+        Local $sActualCols = _GetTableColumnsForLog("B_BT")
+        $s &= "-- WARNING: B_BT phase generation skipped because required WO/routing/phase columns were not detected in this Ortems schema." & @CRLF
+        $s &= "-- Check the verbose log for the actual B_BT column list and add the proper column aliases to _GenerateWOBTSQL()." & @CRLF
+        _Log("WARNING: B_BT generation skipped. Missing required key mapping: WO='" & $sWOCol & "', routing='" & $sRoutCol & "', phase='" & $sPhaseCol & "'.")
+        If $sActualCols <> "" Then _Log("B_BT actual columns: " & $sActualCols)
+        Return $s
+    EndIf
+
+    Local $nWO = _GUICtrlListView_GetItemCount($g_hLV_WO)
+    Local $nRout = _GUICtrlListView_GetItemCount($g_hLV_Rout)
+
+    For $i = 0 To $nWO - 1
+        Local $sNum = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 0), 3)
+        Local $sMat = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 1), 3)
+        Local $sRot = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 2), 3)
+        Local $sVer = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 3), 3)
+        Local $nQtd = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 4), "0")
+        Local $sDtI = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 5), 3)
+        Local $sDtF = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 6), 3)
+
+        For $r = 0 To $nRout - 1
+            Local $sRoutID = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Rout, $r, 0), 3)
+            If $sRoutID <> $sRot Then ContinueLoop
+
+            Local $nFase = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_Rout, $r, 2), "0")
+            Local $sOpe  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Rout, $r, 3), 3)
+            Local $sMach = _LookupUniqueMachineByOperation($sOpe)
+
+            Local $sCols = _SQLIdent($sWOCol) & ", " & _SQLIdent($sRoutCol) & ", " & _SQLIdent($sPhaseCol)
+            Local $sVals = _SQLQ($sNum) & ", " & _SQLQ($sRot) & ", " & $nFase
+            Local $sWhere = ""
+            _AppendWhereEquals($sWhere, $sWOCol, _SQLQ($sNum))
+            _AppendWhereEquals($sWhere, $sRoutCol, _SQLQ($sRot))
+            _AppendWhereEquals($sWhere, $sPhaseCol, $nFase)
+
+            _AppendColumnValue($sCols, $sVals, $sOpeCol,    _SQLQ($sOpe))
+            _AppendColumnValue($sCols, $sVals, $sMachCol,   _SQLQ($sMach))
+            _AppendColumnValue($sCols, $sVals, $sItemCol,   _SQLQ($sMat))
+            _AppendColumnValue($sCols, $sVals, $sVerCol,    _SQLQ($sVer))
+            _AppendColumnValue($sCols, $sVals, $sSerieCol,  "'0'")
+            _AppendColumnValue($sCols, $sVals, $sQtyCol,    $nQtd)
+            _AppendColumnValue($sCols, $sVals, $sStartCol,  _SQLDateTime103($sDtI, "01/01/1995 00:00"))
+            _AppendColumnValue($sCols, $sVals, $sEndCol,    _SQLDateTime103($sDtF, "01/01/2050 23:59"))
+            _AppendColumnValue($sCols, $sVals, $sGestCol,   "'F'")
+            _AppendColumnValue($sCols, $sVals, $sStatusCol, "'S'")
+            _AppendColumnValue($sCols, $sVals, $sModeCol,   "'C'")
+
+            $s &= "IF NOT EXISTS (SELECT 1 FROM B_BT WHERE " & $sWhere & ")" & @CRLF
+            $s &= "    INSERT INTO B_BT (" & $sCols & ")" & @CRLF
+            $s &= "    VALUES (" & $sVals & ");" & @CRLF
+        Next
+    Next
+
+    Return $s
+EndFunc
 
 Func _GenerateWOLSQL()
     Local $s = ""
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_WOL)
     For $i = 0 To $nRows - 1
-        Local $sNOF_P = _GUICtrlListView_GetItemText($g_hLV_WOL, $i, 0)
-        Local $sNOMG_P= _GUICtrlListView_GetItemText($g_hLV_WOL, $i, 1)
-        Local $sFas_P = _GUICtrlListView_GetItemText($g_hLV_WOL, $i, 2)
-        Local $sNOF_S = _GUICtrlListView_GetItemText($g_hLV_WOL, $i, 3)
-        Local $sNOMG_S= _GUICtrlListView_GetItemText($g_hLV_WOL, $i, 4)
-        Local $sFas_S = _GUICtrlListView_GetItemText($g_hLV_WOL, $i, 5)
-        Local $sTipo  = _GUICtrlListView_GetItemText($g_hLV_WOL, $i, 6)
+        Local $sNOF_P = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WOL, $i, 0), 3)
+        Local $sNOMG_P= StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WOL, $i, 1), 3)
+        Local $sFas_P = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_WOL, $i, 2), "0")
+        Local $sNOF_S = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WOL, $i, 3), 3)
+        Local $sNOMG_S= StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WOL, $i, 4), 3)
+        Local $sFas_S = _SQLNum(_GUICtrlListView_GetItemText($g_hLV_WOL, $i, 5), "0")
+        Local $sTipo  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WOL, $i, 6), 3)
 
-        $s &= "IF NOT EXISTS (SELECT 1 FROM B_PROF WHERE NOF='" & $sNOF_S & "' AND NOMG='" & $sNOMG_S & "' AND NOPHASE=" & $sFas_S & " AND B_O_NOF='" & $sNOF_P & "' AND B_P_NOMG='" & $sNOMG_P & "' AND B_P_NOPHASE=" & $sFas_P & ")" & @CRLF
+        $s &= "IF NOT EXISTS (SELECT 1 FROM B_PROF WHERE NOF=" & _SQLQ($sNOF_S) & " AND NOMG=" & _SQLQ($sNOMG_S) & " AND NOPHASE=" & $sFas_S & " AND B_O_NOF=" & _SQLQ($sNOF_P) & " AND B_P_NOMG=" & _SQLQ($sNOMG_P) & " AND B_P_NOPHASE=" & $sFas_P & ")" & @CRLF
         $s &= "    INSERT INTO B_PROF (NOF, NOMG, NOPHASE, B_O_NOF, B_P_NOMG, B_P_NOPHASE, PROF_TYPEPREC)" & @CRLF
-        $s &= "    VALUES ('" & $sNOF_S & "', '" & $sNOMG_S & "', " & $sFas_S & ", '" & $sNOF_P & "', '" & $sNOMG_P & "', " & $sFas_P & ", '" & $sTipo & "');" & @CRLF
+        $s &= "    VALUES (" & _SQLQ($sNOF_S) & ", " & _SQLQ($sNOMG_S) & ", " & $sFas_S & ", " & _SQLQ($sNOF_P) & ", " & _SQLQ($sNOMG_P) & ", " & $sFas_P & ", " & _SQLQ($sTipo) & ");" & @CRLF
     Next
     Return $s
 EndFunc
-
 
 ; Extract the first table name referenced by an INSERT/UPDATE/DELETE/IF NOT EXISTS statement.
 ; Returns "?" if it cannot be determined.
@@ -2799,8 +3600,14 @@ EndFunc
 ; Interpret common SQL Server error messages and return a friendly hint string, or "".
 Func _InterpretSQLError($sErr)
     Local $sU = StringUpper($sErr)
+    If StringInStr($sU, "E_GAMME_NOME") Then
+        Return "BOM insertion failed because Ortems could not validate the parent item/version/routing bridge. This usually means B_VER_ART or E_GAMME_NOME does not contain the parent item + version + routing used by the BOM row."
+    EndIf
     If StringInStr($sU, "VIOLATION OF PRIMARY KEY") Or StringInStr($sU, "DUPLICATE KEY") Then
         Return "Primary key already exists in the target table. The row was previously loaded - this usually happens when you re-run the SQL on a database that already contains the data. The generator adds IF NOT EXISTS guards for known tables; if the error persists, the composite key may not match the guard columns."
+    EndIf
+    If StringInStr($sU, "FK2_B_PART") Or (StringInStr($sU, "B_PHAS") And StringInStr($sU, "B_VER_ART")) Then
+        Return "B_VER_ART / B_PART is pointing an item version to a routing/phase combination that does not exist in B_PHAS. The import now cleans B_PART/B_PARTC/I_PART/I_PARTC links for the impacted item version before changing B_VER_ART.NOMG. Also make sure Clear existing data before insert is enabled for full dataset refreshes."
     EndIf
     If StringInStr($sU, "FOREIGN KEY") Or StringInStr($sU, "REFERENCE CONSTRAINT") Then
         Return "A foreign key reference is missing. Check that the parent row (item/routing/calendar) exists before inserting the child row. Run FK Pre-validation for more details."
@@ -2814,6 +3621,9 @@ Func _InterpretSQLError($sErr)
     If StringInStr($sU, "CONVERSION FAILED") Or StringInStr($sU, "ARITHMETIC OVERFLOW") Then
         Return "A value could not be converted to the target column type. Check numeric/date fields in the source row."
     EndIf
+    If StringInStr($sU, "INVALID COLUMN NAME") Then
+        Return "The SQL references a column that does not exist in this Ortems schema. Regenerate the SQL after testing the DB connection so the Toolbox can detect the version-specific column names."
+    EndIf
     If StringInStr($sU, "INVALID OBJECT NAME") Then
         Return "The target table does not exist in this database. Check that the Ortems schema is installed."
     EndIf
@@ -2821,6 +3631,81 @@ Func _InterpretSQLError($sErr)
         Return "The connected user does not have permission to modify this table."
     EndIf
     Return ""
+EndFunc
+
+Func _SQLStripLineComments($sStmt)
+    Local $sNormalized = StringReplace($sStmt, @CRLF, @LF)
+    $sNormalized = StringReplace($sNormalized, @CR, @LF)
+    Local $aLines = StringSplit($sNormalized, @LF, 1)
+    Local $sOut = ""
+    For $i = 1 To $aLines[0]
+        Local $sLine = $aLines[$i]
+        Local $sTrim = StringStripWS($sLine, 3)
+        If $sTrim = "" Then ContinueLoop
+        If StringLeft($sTrim, 2) = "--" Then ContinueLoop
+        $sOut &= $sLine & @CRLF
+    Next
+    Return StringStripWS($sOut, 3)
+EndFunc
+
+Func _SQLSplitAppend(ByRef $aOut, ByRef $nCount, $sStmt)
+    Local $sClean = _SQLStripLineComments($sStmt)
+    If $sClean = "" Then Return
+    $nCount += 1
+    ReDim $aOut[$nCount + 1]
+    $aOut[$nCount] = $sClean
+EndFunc
+
+Func _SQLSplitStatements($sSQL)
+    Local $aOut[1]
+    Local $nCount = 0
+    Local $sCur = ""
+    Local $bInQuote = False
+    Local $bInLineComment = False
+    Local $nLen = StringLen($sSQL)
+
+    For $i = 1 To $nLen
+        Local $ch = StringMid($sSQL, $i, 1)
+
+        ; Keep line comments attached to the current chunk, but ignore any semicolon inside them.
+        ; The append step removes comment-only lines before execution.
+        If $bInLineComment Then
+            $sCur &= $ch
+            If $ch = @CR Or $ch = @LF Then $bInLineComment = False
+            ContinueLoop
+        EndIf
+
+        If Not $bInQuote Then
+            If $ch = "-" And $i < $nLen And StringMid($sSQL, $i + 1, 1) = "-" Then
+                $sCur &= "--"
+                $i += 1
+                $bInLineComment = True
+                ContinueLoop
+            EndIf
+        EndIf
+
+        If $ch = "'" Then
+            $sCur &= $ch
+            If $bInQuote And $i < $nLen And StringMid($sSQL, $i + 1, 1) = "'" Then
+                $i += 1
+                $sCur &= "'"
+            Else
+                $bInQuote = Not $bInQuote
+            EndIf
+            ContinueLoop
+        EndIf
+
+        If $ch = ";" And Not $bInQuote Then
+            _SQLSplitAppend($aOut, $nCount, $sCur)
+            $sCur = ""
+        Else
+            $sCur &= $ch
+        EndIf
+    Next
+
+    _SQLSplitAppend($aOut, $nCount, $sCur)
+    $aOut[0] = $nCount
+    Return $aOut
 EndFunc
 
 Func _ExecuteSQL()
@@ -2880,18 +3765,21 @@ Func _ExecuteSQL()
         EndIf
     EndIf
 
-    Local $aStmts = StringSplit($sSQL, ";", 1)
+    Local $aStmts = _SQLSplitStatements($sSQL)
 
     For $i = 1 To $aStmts[0]
         Local $sStmt = StringStripWS($aStmts[$i], 3)
         If $sStmt = "" Then ContinueLoop
-        If StringLeft($sStmt, 2) = "--" Then ContinueLoop
-        If StringUpper(StringStripWS($sStmt, 3)) = "BEGIN TRANSACTION" Then ContinueLoop
-        If StringUpper(StringStripWS($sStmt, 3)) = "COMMIT TRANSACTION" Then ContinueLoop
-        If StringUpper(StringStripWS($sStmt, 3)) = "ROLLBACK TRANSACTION" Then ContinueLoop
 
+        ; Remove SQL comment-only lines before deciding whether this chunk is executable.
+        ; This avoids skipping a valid statement just because it starts after a section header comment.
         Local $sNoComments = StringRegExpReplace($sStmt, "(?m)^\s*--[^\r\n]*", "")
-        If StringStripWS($sNoComments, 3) = "" Then ContinueLoop
+        $sStmt = StringStripWS($sNoComments, 3)
+        If $sStmt = "" Then ContinueLoop
+
+        If StringUpper($sStmt) = "BEGIN TRANSACTION" Then ContinueLoop
+        If StringUpper($sStmt) = "COMMIT TRANSACTION" Then ContinueLoop
+        If StringUpper($sStmt) = "ROLLBACK TRANSACTION" Then ContinueLoop
 
         $g_sLastComError = ""
         $oConn.Execute($sStmt)
@@ -2913,7 +3801,7 @@ Func _ExecuteSQL()
                 _Log("Transaction ROLLED BACK due to error.")
                 Local $sMsg = "A SQL error occurred on table [" & $sTbl & "] - the transaction was rolled back." & @CRLF & @CRLF
                 If $sHint <> "" Then $sMsg &= $sHint & @CRLF & @CRLF
-                $sMsg &= "Check the execution log and log.txt for details."
+                $sMsg &= "Check the execution log and the session log file for details."
                 MsgBox(16, "Execution error", $sMsg)
                 Return
             EndIf
@@ -2939,7 +3827,7 @@ Func _ExecuteSQL()
     If $nErr = 0 Then
         MsgBox(64, "Success", "All SQL executed successfully!" & @CRLF & @CRLF & $nOK & " statements executed.")
     Else
-        MsgBox(48, "Completed with errors", $nOK & " statements OK, " & $nErr & " errors." & @CRLF & "Check the execution log and log.txt for details.")
+        MsgBox(48, "Completed with errors", $nOK & " statements OK, " & $nErr & " errors." & @CRLF & "Check the execution log and the session log file for details.")
     EndIf
 EndFunc
 
@@ -2968,11 +3856,13 @@ Func _GetClearSQL()
         "FROM sys.foreign_keys" & @CRLF & _
         "EXEC sp_executesql @sql"
 
-    Local $aTables[19] = [ _
-        "B_BT2",    "B_PREN2", "B_PROF",    "B_NOME", "E_OF2", _
-        "B_OF",     "B_SER",   "B_VER_ART", "B_ART",  "B_PHAS", _
-        "B_GAMM",   "B_CADE",  "B_OPE",     "B_MACH", "B_SECT", _
-        "B_ILOT",   "B_ZONE",  "B_PERI",    "B_CAL" _
+    Local $aTables[29] = [ _
+        "B_BT2",    "B_PREN2",  "B_PROF",    "B_PHM",       "B_NOME", _
+        "E_GAMME_NOME", "I_NOME", "I_PARTC", "I_PART",      "B_PARTC", _
+        "B_ART_UTIL", "B_PART",  "E_OF2",    "B_BT",        "B_OF", _
+        "B_SER",    "B_VER_ART", "E_ART_PERI", "B_ART",     "B_PHAS", _
+        "B_GAMM",   "B_CADE",   "B_OPE",     "B_MACH",      "B_SECT", _
+        "B_ILOT",   "B_ZONE",   "B_PERI",    "B_CAL" _
     ]
 
     ; Step 2 - disable triggers on every target table
@@ -3002,7 +3892,7 @@ Func _GetClearSQL()
     $aResult[$idx] = $sDisableTrig
     $idx += 1
     For $i = 0 To UBound($aTables) - 1
-        $aResult[$idx] = "DELETE FROM [dbo].[" & $aTables[$i] & "]"
+        $aResult[$idx] = "IF OBJECT_ID(N'[dbo].[" & $aTables[$i] & "]', N'U') IS NOT NULL DELETE FROM [dbo].[" & $aTables[$i] & "]"
         $idx += 1
     Next
     $aResult[$idx] = $sEnableTrig
@@ -3012,11 +3902,22 @@ Func _GetClearSQL()
     Return $aResult
 EndFunc
 
+Func _GetClearSQLScript()
+    Local $aStmts = _GetClearSQL()
+    Local $s = ""
+    For $i = 1 To $aStmts[0]
+        $s &= $aStmts[$i]
+        If StringRight(StringStripWS($aStmts[$i], 3), 1) <> ";" Then $s &= ";"
+        $s &= @CRLF
+    Next
+    Return $s
+EndFunc
+
 ; Helper: turns a string array into a SQL IN-list  e.g. 'B_GAMM','B_OF',...
 ;=============================================================================
 ; FK PRE-VALIDATION: check referential integrity before attempting import
 ; Queries data in the ListViews against what already exists in the DB.
-; Logs each violation to log.txt and returns the count of issues found.
+; Logs each violation to the execution log and session log file and returns the count of issues found.
 ;=============================================================================
 ;=============================================================================
 ; FK PRE-VALIDATION: cross-check references WITHIN the import data
@@ -3123,9 +4024,16 @@ Func _ValidateFKBeforeImport()
 
     $nIssues += _CrossCheckItemRoutingRef($g_hLV_Mat, 2, 4, $setRoutIDs, "Items tab / Routing ID", False)
 
+    $nIssues += _CrossCheck($g_hLV_BOM,          0,       $setMatIDs,      "BOM tab / Parent item ID")
+    $nIssues += _CrossCheck($g_hLV_BOM,          2,       $setMatIDs,      "BOM tab / Component item ID")
     $nIssues += _CrossCheck($g_hLV_BOM,          3,       $setRoutIDs,     "BOM tab / Routing ID")
+    $nIssues += _CrossCheckComposite($g_hLV_BOM, "0,1",   $setMatVer,      "BOM tab / Parent item + version")
+    $nIssues += _CrossCheckComposite($g_hLV_BOM, "0,3,1", $setMatRoutVer,  "BOM tab / Parent item + routing + version")
+    $nIssues += _CrossCheckComposite($g_hLV_BOM, "3,4",   $setRoutPhase,   "BOM tab / Routing + phase")
+    $nIssues += _ValidateBOMParentRules()
 
     $nIssues += _CrossCheckComposite($g_hLV_WO,  "1,2,3", $setMatRoutVer,  "Work Orders tab / Item + routing + version")
+    $nIssues += _ValidateWorkOrderRules()
 
     $nIssues += _CrossCheck($g_hLV_WOL,          0,       $setWOIDs,       "WO Links tab / Predecessor WO", True)
     $nIssues += _CrossCheck($g_hLV_WOL,          3,       $setWOIDs,       "WO Links tab / Successor WO", True)
@@ -3140,9 +4048,9 @@ Func _ValidateFKBeforeImport()
     $nIssues += _CrossCheckCompositeMachineRef($g_hLV_SR, "0,1,2", 2, $setOpeCTMach, "Secondary Resources tab / Operation + WC + Machine")
     $nIssues += _CrossCheck($g_hLV_SR,           4,       $setAnyCalIDs,   "Secondary Resources tab / Capacity calendar ID", True)
 
-    $nIssues += _CrossCheckComposite($g_hLV_Stk, "0,2",   $setMatVer,      "Inventory Movements tab / Item + version")
+    $nIssues += _CrossCheckInventoryItemVersion($g_hLV_Stk, 0, 2, $setMatVer, "Inventory Movements tab / Item + version")
     $nIssues += _CrossCheck($g_hLV_Stk,          1,       $setRoutIDs,     "Inventory Movements tab / Routing ID", True)
-    $nIssues += _CrossCheckComposite($g_hLV_Stk, "0,1,2", $setMatRoutVer,  "Inventory Movements tab / Item + routing + version", True)
+    $nIssues += _CrossCheckInventoryItemRoutingVersion($g_hLV_Stk, 0, 1, 2, $setMatRoutVer, "Inventory Movements tab / Item + routing + version")
 
     ; Format checks
     $nIssues += _ValidateCalendarFormats()
@@ -3338,6 +4246,178 @@ Func _CrossCheckComposite($hLV, $sCols, $sSet, $sDesc, $bAllowEmpty = False)
     Return $nIssues
 EndFunc
 
+Func _CrossCheckInventoryItemVersion($hLV, $iItemCol, $iVerCol, $sSet, $sDesc)
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        Local $sItem = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iItemCol), 3)
+        Local $sVer  = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iVerCol), 3)
+        If $sItem = "" Then ContinueLoop
+
+        If _ItemIsRawMaterial($sItem) Then
+            If $sVer <> "" Then
+                $nIssues += 1
+                _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": MP raw material items cannot have version '" & $sVer & "'. Leave Version blank.")
+            EndIf
+            ContinueLoop
+        EndIf
+
+        If $sVer = "" Then
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": version is required for manufactured items, but not for MP raw materials.")
+            ContinueLoop
+        EndIf
+
+        Local $sKey = $sItem & "|" & $sVer
+        If Not StringInStr($sSet, ";" & $sKey & ";") Then
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sKey & "' does not match any manufactured item/version in the Items tab.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _CrossCheckInventoryItemRoutingVersion($hLV, $iItemCol, $iRoutingCol, $iVerCol, $sSet, $sDesc)
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($hLV)
+    For $i = 0 To $nRows - 1
+        Local $sItem = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iItemCol), 3)
+        Local $sRout = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iRoutingCol), 3)
+        Local $sVer  = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iVerCol), 3)
+        If $sItem = "" Then ContinueLoop
+
+        If _ItemIsRawMaterial($sItem) Then
+            If $sRout <> "" Then
+                $nIssues += 1
+                _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": MP raw material items cannot have routing '" & $sRout & "'. Leave Routing ID blank.")
+            EndIf
+            If $sVer <> "" Then
+                $nIssues += 1
+                _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": MP raw material items cannot have version '" & $sVer & "'. Leave Version blank.")
+            EndIf
+            ContinueLoop
+        EndIf
+
+        If $sRout = "" Or $sVer = "" Then
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": routing and version are required for manufactured inventory movements. MP raw materials may leave both blank.")
+            ContinueLoop
+        EndIf
+
+        Local $sKey = $sItem & "|" & $sRout & "|" & $sVer
+        If Not StringInStr($sSet, ";" & $sKey & ";") Then
+            $nIssues += 1
+            _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sKey & "' does not match any item/routing/version in the Items tab.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _ValidateBOMParentRules()
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_BOM)
+    For $i = 0 To $nRows - 1
+        Local $sParent = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_BOM, $i, 0), 3)
+        Local $sPVer   = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_BOM, $i, 1), 3)
+        If $sParent = "" Then ContinueLoop
+        If _ItemIsRawMaterial($sParent) Then
+            $nIssues += 1
+            _IntegrityIssue("BOM tab - row " & ($i + 1) & ": parent item '" & $sParent & "' is MP. Raw materials cannot be BOM parents because they do not have a produced version/routing.")
+        ElseIf $sPVer = "" Then
+            $nIssues += 1
+            _IntegrityIssue("BOM tab - row " & ($i + 1) & ": parent version is required for manufactured parent items.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _ValidateWorkOrderRules()
+    Local $nIssues = 0
+    Local $setRoutPhase = _LVCompositeSet($g_hLV_Rout, "0,2")
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_WO)
+    For $i = 0 To $nRows - 1
+        Local $sWO   = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 0), 3)
+        Local $sItem = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 1), 3)
+        Local $sRout = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 2), 3)
+        If $sItem <> "" And _ItemIsRawMaterial($sItem) Then
+            $nIssues += 1
+            _IntegrityIssue("Work Orders tab - row " & ($i + 1) & ": WO '" & $sWO & "' points to MP item '" & $sItem & "'. WOs must produce manufactured items with routing/version.")
+        EndIf
+        If $sRout <> "" And Not _RoutingHasAtLeastOnePhase($sRout, $setRoutPhase) Then
+            $nIssues += 1
+            _IntegrityIssue("Work Orders tab - row " & ($i + 1) & ": routing '" & $sRout & "' has no phase. Ortems requires B_BT phase rows for each WO.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _RoutingHasAtLeastOnePhase($sRouting, $setRoutPhase)
+    Local $sR = StringStripWS($sRouting, 3)
+    If $sR = "" Then Return False
+    Local $aParts = StringSplit($setRoutPhase, ";", 1)
+    For $i = 1 To $aParts[0]
+        If StringLeft($aParts[$i], StringLen($sR) + 1) = $sR & "|" Then Return True
+    Next
+    Return False
+EndFunc
+
+Func _ValidateManufacturedItemRequiredFields()
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Mat)
+    For $i = 0 To $nRows - 1
+        Local $sType = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 2), 3)
+        Local $sVer = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 3), 3)
+        Local $sRout = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 4), 3)
+        If _IsRawMaterialType($sType) Then
+            If $sVer <> "" Then
+                $nIssues += 1
+                _IntegrityIssue("Items tab - row " & ($i + 1) & ": MP raw material items cannot have a version. Clear the Version field.")
+            EndIf
+            If $sRout <> "" Then
+                $nIssues += 1
+                _IntegrityIssue("Items tab - row " & ($i + 1) & ": MP raw material items cannot have a routing. Clear the Routing ID field.")
+            EndIf
+            ContinueLoop
+        EndIf
+        If $sVer = "" Then
+            $nIssues += 1
+            _IntegrityIssue("Items tab - row " & ($i + 1) & ": version is required for SF/PF manufactured items.")
+        EndIf
+        If $sRout = "" Then
+            $nIssues += 1
+            _IntegrityIssue("Items tab - row " & ($i + 1) & ": routing is required for SF/PF manufactured items.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
+Func _ValidateStockRequiredFieldsByItemType()
+    Local $nIssues = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Stk)
+    For $i = 0 To $nRows - 1
+        Local $sItem = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Stk, $i, 0), 3)
+        Local $sRout = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Stk, $i, 1), 3)
+        Local $sVer  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Stk, $i, 2), 3)
+        If $sItem = "" Then ContinueLoop
+        If _ItemIsRawMaterial($sItem) Then
+            If $sRout <> "" Then
+                $nIssues += 1
+                _IntegrityIssue("Inventory Movements tab - row " & ($i + 1) & ": MP raw material items cannot have a routing. Clear the Routing ID field.")
+            EndIf
+            If $sVer <> "" Then
+                $nIssues += 1
+                _IntegrityIssue("Inventory Movements tab - row " & ($i + 1) & ": MP raw material items cannot have a version. Clear the Version field.")
+            EndIf
+            ContinueLoop
+        EndIf
+        If $sRout = "" Or $sVer = "" Then
+            $nIssues += 1
+            _IntegrityIssue("Inventory Movements tab - row " & ($i + 1) & ": routing and version are required for manufactured inventory movements.")
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
 Func _IntegrityIssue($sMsg)
     $g_sIntegrityReport &= "- " & $sMsg & @CRLF
     _Log($sMsg)
@@ -3371,7 +4451,7 @@ Func _IntegrityBuildMessage($nIssues)
     Local $sPreview = _IntegrityPreview(12)
     Local $sMsg = $nIssues & " integrity issue(s) were found." & @CRLF & @CRLF
     If $sPreview <> "" Then $sMsg &= $sPreview & @CRLF & @CRLF
-    $sMsg &= "Full details were written to the execution log and to log.txt."
+    $sMsg &= "Full details were written to the execution log and to the session log file."
     Return $sMsg
 EndFunc
 
@@ -3419,6 +4499,10 @@ Func _AutoFixSimpleReferences()
     $nFixed += _AutoFixExactRef($g_hLV_Stk, 0, $setMatIDs,      "Inventory Movements tab / Item ID")
     $nFixed += _AutoFixExactRef($g_hLV_Stk, 1, $setRoutIDs,     "Inventory Movements tab / Routing ID", True)
 
+    ; MP items cannot keep produced-item metadata.
+    $nFixed += _AutoFixRawMaterialItemVersionRouting()
+    $nFixed += _AutoFixRawMaterialInventoryVersionRouting()
+
     ; Safe contextual auto-fixes (only when the lookup resolves to a single possible value)
     $nFixed += _AutoFixMachineByWC($g_hLV_Ops, 2, 3, "Operations tab / Machine ID")
     $nFixed += _AutoFixMachineByWC($g_hLV_SR,  1, 2, "Secondary Resources tab / Machine ID")
@@ -3435,6 +4519,51 @@ Func _AutoFixSimpleReferences()
     Else
         _Log("=== Integrity Auto-Fix finished - " & $nFixed & " field(s) updated ===")
     EndIf
+    Return $nFixed
+EndFunc
+
+
+Func _AutoFixRawMaterialItemVersionRouting()
+    Local $nFixed = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Mat)
+    For $i = 0 To $nRows - 1
+        Local $sType = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 2), 3)
+        If Not _IsRawMaterialType($sType) Then ContinueLoop
+        Local $sVer = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 3), 3)
+        Local $sRout = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 4), 3)
+        If $sVer <> "" Then
+            _GUICtrlListView_SetItemText($g_hLV_Mat, $i, "", 3)
+            $nFixed += 1
+            _Log("AUTO-FIX: Items tab row " & ($i + 1) & " MP version cleared ('" & $sVer & "').")
+        EndIf
+        If $sRout <> "" Then
+            _GUICtrlListView_SetItemText($g_hLV_Mat, $i, "", 4)
+            $nFixed += 1
+            _Log("AUTO-FIX: Items tab row " & ($i + 1) & " MP routing cleared ('" & $sRout & "').")
+        EndIf
+    Next
+    Return $nFixed
+EndFunc
+
+Func _AutoFixRawMaterialInventoryVersionRouting()
+    Local $nFixed = 0
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Stk)
+    For $i = 0 To $nRows - 1
+        Local $sItem = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Stk, $i, 0), 3)
+        If $sItem = "" Or Not _ItemIsRawMaterial($sItem) Then ContinueLoop
+        Local $sRout = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Stk, $i, 1), 3)
+        Local $sVer = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Stk, $i, 2), 3)
+        If $sRout <> "" Then
+            _GUICtrlListView_SetItemText($g_hLV_Stk, $i, "", 1)
+            $nFixed += 1
+            _Log("AUTO-FIX: Inventory Movements tab row " & ($i + 1) & " MP routing cleared ('" & $sRout & "').")
+        EndIf
+        If $sVer <> "" Then
+            _GUICtrlListView_SetItemText($g_hLV_Stk, $i, "", 2)
+            $nFixed += 1
+            _Log("AUTO-FIX: Inventory Movements tab row " & ($i + 1) & " MP version cleared ('" & $sVer & "').")
+        EndIf
+    Next
     Return $nFixed
 EndFunc
 
@@ -3822,12 +4951,14 @@ Func _ValidateRequiredFields()
     $nIssues += _RequiredFieldCheck($g_hLV_Mach, "0,2,4,7,9",     "Machines tab")
     $nIssues += _RequiredFieldCheck($g_hLV_Ops,  "0,2,3,4,5,6",   "Operations tab")
     $nIssues += _RequiredFieldCheck($g_hLV_Rout, "0,2,3",         "Routings tab")
-    $nIssues += _RequiredFieldCheck($g_hLV_Mat,  "0,1,2,3",       "Items tab")
-    $nIssues += _RequiredFieldCheck($g_hLV_BOM,  "3",             "BOM tab")
+    $nIssues += _RequiredFieldCheck($g_hLV_Mat,  "0,1,2",         "Items tab")
+    $nIssues += _ValidateManufacturedItemRequiredFields()
+    $nIssues += _RequiredFieldCheck($g_hLV_BOM,  "0,2,3,4,5,6",   "BOM tab")
     $nIssues += _RequiredFieldCheck($g_hLV_WO,   "0,1,2,3,4",     "Work Orders tab")
     $nIssues += _RequiredFieldCheck($g_hLV_SR,   "0,1,2,3",       "Secondary Resources tab")
     $nIssues += _RequiredFieldCheck($g_hLV_Cap,  "0,1,2,3,4,5",   "Capacity tab")
-    $nIssues += _RequiredFieldCheck($g_hLV_Stk,  "0,2,3,4",       "Inventory Movements tab")
+    $nIssues += _RequiredFieldCheck($g_hLV_Stk,  "0,3,4",         "Inventory Movements tab")
+    $nIssues += _ValidateStockRequiredFieldsByItemType()
     Return $nIssues
 EndFunc
 
@@ -3849,6 +4980,40 @@ Func _ValidateDuplicateKey($hLV, $sCols, $sDesc)
     Return $nIssues
 EndFunc
 
+Func _ValidateDuplicateMaterialKeys()
+    Local $nIssues = 0
+    Local $sSeenRaw = ";"
+    Local $sSeenMfg = ";"
+    Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Mat)
+
+    For $i = 0 To $nRows - 1
+        Local $sItem = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 0), 3)
+        Local $sType = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 2), 3)
+        Local $sVer  = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 3), 3)
+        If $sItem = "" Then ContinueLoop
+
+        If _IsRawMaterialType($sType) Then
+            Local $sRawKey = StringLower($sItem)
+            If StringInStr($sSeenRaw, ";" & $sRawKey & ";") Then
+                $nIssues += 1
+                _IntegrityIssue("Items tab / MP Item - row " & ($i + 1) & ": duplicate raw material item '" & $sItem & "'.")
+            Else
+                $sSeenRaw &= $sRawKey & ";"
+            EndIf
+        Else
+            If $sVer = "" Then ContinueLoop
+            Local $sMfgKey = StringLower($sItem & "|" & $sVer)
+            If StringInStr($sSeenMfg, ";" & $sMfgKey & ";") Then
+                $nIssues += 1
+                _IntegrityIssue("Items tab / Item + Version - row " & ($i + 1) & ": duplicate key '" & $sItem & "|" & $sVer & "'.")
+            Else
+                $sSeenMfg &= $sMfgKey & ";"
+            EndIf
+        EndIf
+    Next
+    Return $nIssues
+EndFunc
+
 Func _ValidateDuplicateKeys()
     Local $nIssues = 0
     $nIssues += _ValidateDuplicateKey($g_hLV_Cal,  "0,2,3",   "Calendars tab / Calendar + start day + start time")
@@ -3856,7 +5021,7 @@ Func _ValidateDuplicateKeys()
     $nIssues += _ValidateDuplicateKey($g_hLV_Mach, "2,7",     "Machines tab / WC + Machine")
     $nIssues += _ValidateDuplicateKey($g_hLV_Ops,  "0,2,3",   "Operations tab / Operation + WC + Machine")
     $nIssues += _ValidateDuplicateKey($g_hLV_Rout, "0,2",     "Routings tab / Routing + Phase")
-    $nIssues += _ValidateDuplicateKey($g_hLV_Mat,  "0,3",     "Items tab / Item + Version")
+    $nIssues += _ValidateDuplicateMaterialKeys()
     $nIssues += _ValidateDuplicateKey($g_hLV_WO,   "0",       "Work Orders tab / WO ID")
     $nIssues += _ValidateDuplicateKey($g_hLV_WOL,  "0,1,2,3,4,5", "WO Links tab / full link")
     $nIssues += _ValidateDuplicateKey($g_hLV_Cap,  "0,1,2",   "Capacity tab / Capacity calendar + start day + start time")
@@ -3921,8 +5086,8 @@ Func _ClearDatabase()
         _Log("Database cleared successfully (" & $nOK & " statements OK).")
         MsgBox(64, "OK", "Demo data removed from the database successfully.")
     Else
-        _Log("Clear completed with " & $nErr & " error(s) - check log.txt for details.")
-        MsgBox(48, "Completed with errors", "Clear finished with " & $nErr & " error(s)." & @CRLF & "Check the execution log and log.txt for details.")
+        _Log("Clear completed with " & $nErr & " error(s) - check the session log file for details.")
+        MsgBox(48, "Completed with errors", "Clear finished with " & $nErr & " error(s)." & @CRLF & "Check the execution log and the session log file for details.")
     EndIf
 EndFunc
 
@@ -4089,11 +5254,13 @@ Func _XLImportWorksheetToLV($hLV, $oSheet)
         $nImported += 1
     Next
     _LV_Renumber($hLV)
+    _LogVerbose("Workbook sheet imported: " & $oSheet.Name & " = " & $nImported & " row(s)")
     Return $nImported
 EndFunc
 
 Func _ExportExcel()
     Local $sFile = FileSaveDialog("Export Ortems Toolbox workbook", @WorkingDir, "Excel Workbook (*.xlsx)|All (*.*)", 16, "ortems_toolbox_export.xlsx")
+    If Not @error And $sFile <> "" Then _LogVerbose("Workbook export requested: " & $sFile)
     If @error Or $sFile = "" Then Return
     If StringLower(StringRight($sFile, 5)) <> ".xlsx" Then $sFile &= ".xlsx"
 
@@ -4144,6 +5311,7 @@ EndFunc
 
 Func _ImportExcel()
     Local $sFile = FileOpenDialog("Import Ortems Toolbox workbook", @WorkingDir, "Excel Workbook (*.xlsx;*.xlsm;*.xls)|All (*.*)", 1)
+    If Not @error And $sFile <> "" Then _LogVerbose("Workbook import requested: " & $sFile)
     If @error Or $sFile = "" Then Return
 
     Local $oExcel = _ExcelCreateApp()
@@ -4663,12 +5831,20 @@ Func _DB_LoadMaterials($oConn)
 
     Local $nRows = 0
     While Not $oRS.EOF
+        Local $sType = StringStripWS(String($oRS.Fields("TYPEMATI").Value), 3)
+        Local $sVer = String($oRS.Fields("VER_ART").Value)
+        Local $sRout = String($oRS.Fields("NOMG").Value)
+        If _IsRawMaterialType($sType) Then
+            If StringStripWS($sVer, 3) <> "" Or StringStripWS($sRout, 3) <> "" Then _LogVerbose("Load from DB: ignored B_VER_ART version/routing for MP item '" & $oRS.Fields("CODEARTIC").Value & "'.")
+            $sVer = ""
+            $sRout = ""
+        EndIf
         _LV_AppendDataRow($g_hLV_Mat, _
             $oRS.Fields("CODEARTIC").Value & "|" & _
             $oRS.Fields("LIBARTIC").Value & "|" & _
-            $oRS.Fields("TYPEMATI").Value & "|" & _
-            $oRS.Fields("VER_ART").Value & "|" & _
-            $oRS.Fields("NOMG").Value & "|" & _
+            $sType & "|" & _
+            $sVer & "|" & _
+            $sRout & "|" & _
             $oRS.Fields("QTE_STOCK").Value)
         $nRows += 1
         $oRS.MoveNext()
@@ -4807,18 +5983,26 @@ EndFunc
 ;=============================================================================
 ; LOG
 ;=============================================================================
+Func _EnsureLogFile()
+    If Not FileExists($g_sLogDir) Then DirCreate($g_sLogDir)
+    If $g_sLogFile = "" Then
+        $g_sLogFile = $g_sLogDir & "\Toolbox_" & @YEAR & @MON & @MDAY & "_" & @HOUR & @MIN & @SEC & ".log"
+    EndIf
+    Return $g_sLogFile
+EndFunc
+
 Func _Log($sMsg, $bErrorOnly = False)
     Local $sTimestamp = "[" & @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & "]"
     Local $sLine = $sTimestamp & " " & $sMsg
 
-    ; Always write to the on-screen exec log (newest entry on top)
-    If Not $bErrorOnly Then
+    ; Always write to the on-screen exec log (newest entry on top) when available.
+    If Not $bErrorOnly And IsDeclared("g_hExecLog") And $g_hExecLog <> 0 Then
         Local $sCurrent = GUICtrlRead($g_hExecLog)
         GUICtrlSetData($g_hExecLog, $sLine & @CRLF & $sCurrent)
     EndIf
 
-    ; Always append to log.txt (full history, never truncated during a session)
-    Local $sLogFile = @ScriptDir & "\log.txt"
+    ; Always append to the session log file under .\log.
+    Local $sLogFile = _EnsureLogFile()
     Local $hFile = FileOpen($sLogFile, 1)   ; 1 = append
     If $hFile <> -1 Then
         FileWriteLine($hFile, $sLine)
@@ -4826,15 +6010,34 @@ Func _Log($sMsg, $bErrorOnly = False)
     EndIf
 EndFunc
 
-; Write a separator line to log.txt at startup so sessions are clearly delimited
+Func _LogVerbose($sMsg)
+    If Not $g_bVerbose Then Return
+    _Log("[VERBOSE] " & $sMsg)
+EndFunc
+
+Func _MaskConnectionString($sConn)
+    Local $sMasked = StringRegExpReplace($sConn, "(?i)PWD=[^;]*", "PWD=****")
+    $sMasked = StringRegExpReplace($sMasked, "(?i)Password=[^;]*", "Password=****")
+    Return $sMasked
+EndFunc
+
+; Create one log file per application opening.
 Func _LogSessionStart()
-    Local $sLogFile = @ScriptDir & "\log.txt"
-    Local $hFile = FileOpen($sLogFile, 1)
+    Local $sLogFile = _EnsureLogFile()
+    Local $hFile = FileOpen($sLogFile, 2) ; overwrite/create for this session
     If $hFile <> -1 Then
-        FileWriteLine($hFile, "")
         FileWriteLine($hFile, "========== SESSION STARTED: " & @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & " ==========")
+        FileWriteLine($hFile, "Application: " & $TITLE)
+        FileWriteLine($hFile, "Version: " & FileGetVersion(@ScriptFullPath))
+        FileWriteLine($hFile, "Script path: " & @ScriptFullPath)
+        FileWriteLine($hFile, "Log file: " & $sLogFile)
+        FileWriteLine($hFile, "Verbose Mode: " & ($g_bVerbose ? "ON" : "OFF"))
+        FileWriteLine($hFile, "Computer/User: " & @ComputerName & " / " & @UserName)
+        FileWriteLine($hFile, "OS: " & @OSVersion & " " & @OSArch)
+        FileWriteLine($hFile, "============================================================")
         FileClose($hFile)
     EndIf
+    _Log("Session log file created: " & $sLogFile)
 EndFunc
 
 ;=============================================================================
@@ -5005,9 +6208,25 @@ Func _WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
 
     Local $tNMHDR = DllStructCreate($tagNMHDR, $lParam)
     Local $hFrom  = HWnd(DllStructGetData($tNMHDR, "hWndFrom"))
-    If $hFrom <> $g_hTabHandle Then Return $GUI_RUNDEFMSG
-
     Local $iCode = DllStructGetData($tNMHDR, "Code")
+
+    ; While a command is running, keep the window visible but block tab/list interactions.
+    If $g_iBusyDepth > 0 Then
+        If $hFrom = $g_hTabHandle And $iCode = $TCN_SELCHANGING Then Return 1
+        Return 0
+    EndIf
+
+    ; Generic sortable tables: click a ListView header once for ascending, click again for descending.
+    If $iCode = $ORTEMS_LVN_COLUMNCLICK Then
+        Local $hLVFromNotify = _LV_GetControlFromNotifyHandle($hFrom)
+        If $hLVFromNotify <> 0 Then
+            Local $tNMLV = DllStructCreate($tagNMHDR & ";int Item;int SubItem;uint NewState;uint OldState;uint Changed;long ActionX;long ActionY;long Param", $lParam)
+            _LV_SortByColumn($hLVFromNotify, DllStructGetData($tNMLV, "SubItem"))
+            Return 0
+        EndIf
+    EndIf
+
+    If $hFrom <> $g_hTabHandle Then Return $GUI_RUNDEFMSG
 
     Switch $iCode
         Case $TCN_SELCHANGE
@@ -5026,7 +6245,7 @@ Func _WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
 
                 If $g_lblFooter <> 0 Then GUICtrlSetData($g_lblFooter, "Tab [off] - enable the module in tab 2. Modules.")
             Else
-                If $g_lblFooter <> 0 Then GUICtrlSetData($g_lblFooter, $TITLE & " | Replaces Toolbox_v2.0.1.xlsm | " & @YEAR)
+                If $g_lblFooter <> 0 Then GUICtrlSetData($g_lblFooter, $DevBy)
             EndIf
     EndSwitch
 
@@ -5064,7 +6283,7 @@ Func _LayoutMain($w, $h)
     If IsDeclared("g_btnExecute")   Then GUICtrlSetPos($g_btnExecute,   646, $yBtn, 115, 32)
     If IsDeclared("g_btnSaveSQL")   Then GUICtrlSetPos($g_btnSaveSQL,   769, $yBtn, 105, 32)
     If IsDeclared("g_btnIntegrity") Then GUICtrlSetPos($g_btnIntegrity, 882, $yBtn, 125, 32)
-    If $g_lblFooter <> 0 Then GUICtrlSetPos($g_lblFooter, $w - 210, $yBtn + 14, 200, 18)
+    If $g_lblFooter <> 0 Then GUICtrlSetPos($g_lblFooter, $w - 445, $yBtn + 35, 395, 18)
 
     ; Usable content area bottom edge (inside the tab, minus a small margin)
     Local $tabInnerBottom = $bottomBarTop - $TAB_TOP_Y - 30
@@ -5151,6 +6370,7 @@ Func _SaveSettings()
     If IsDeclared("g_chkClearFirst") Then
         IniWrite($g_sIniFile, "SQL", "ClearFirst",  (GUICtrlRead($g_chkClearFirst)  = $GUI_CHECKED ? "1" : "0"))
         IniWrite($g_sIniFile, "SQL", "Transaction", (GUICtrlRead($g_chkTransaction) = $GUI_CHECKED ? "1" : "0"))
+        If IsDeclared("g_chkVerbose") Then IniWrite($g_sIniFile, "SQL", "Verbose", (GUICtrlRead($g_chkVerbose) = $GUI_CHECKED ? "1" : "0"))
     EndIf
 
     ; [Window]
@@ -5217,6 +6437,14 @@ Func _LoadSettings()
         GUICtrlSetState($g_chkTransaction, $GUI_CHECKED)
     Else
         GUICtrlSetState($g_chkTransaction, $GUI_UNCHECKED)
+    EndIf
+    $g_bVerbose = (IniRead($g_sIniFile, "SQL", "Verbose", "0") = "1")
+    If IsDeclared("g_chkVerbose") Then
+        If $g_bVerbose Then
+            GUICtrlSetState($g_chkVerbose, $GUI_CHECKED)
+        Else
+            GUICtrlSetState($g_chkVerbose, $GUI_UNCHECKED)
+        EndIf
     EndIf
 
     ; [Window] - restore size/position

@@ -1,0 +1,64 @@
+========== SESSION STARTED: 2026-05-07 15:15:07 ==========
+Application: Ortems Toolbox
+Version: 0.0.0.0
+Script path: E:\GitHub\Toolbox\Toolbox.au3
+Log file: E:\GitHub\Toolbox\log\Toolbox_20260507_151507.log
+Verbose Mode: ON
+Computer/User: LP16-FZI1-DSA / FZI1
+OS: WIN_11 X64
+============================================================
+[2026-05-07 15:15:07] Session log file created: E:\GitHub\Toolbox\log\Toolbox_20260507_151507.log
+[2026-05-07 15:15:26] [VERBOSE] UI controls disabled while executing: Test DB connection
+[2026-05-07 15:15:26] Connection test started for database ORTEMS_DEMO on server localhost\SQLEXPRESS
+[2026-05-07 15:15:26] [VERBOSE] Connection string: Driver={SQL Server};Server=localhost\SQLEXPRESS;Database=ORTEMS_DEMO;Trusted_Connection=yes;
+[2026-05-07 15:15:33] [VERBOSE] UI controls disabled while executing: Import workbook
+[2026-05-07 15:15:36] [VERBOSE] Workbook import requested: E:\GitHub\Toolbox\ortems_toolbox_export.xlsx
+[2026-05-07 15:15:44] [VERBOSE] Workbook sheet imported: Calendars = 55 row(s)
+[2026-05-07 15:15:46] [VERBOSE] Workbook sheet imported: Machines = 12 row(s)
+[2026-05-07 15:15:51] [VERBOSE] Workbook sheet imported: Operations = 35 row(s)
+[2026-05-07 15:15:54] [VERBOSE] Workbook sheet imported: Routings = 39 row(s)
+[2026-05-07 15:15:58] [VERBOSE] Workbook sheet imported: Items = 39 row(s)
+[2026-05-07 15:16:09] [VERBOSE] Workbook sheet imported: BOM = 102 row(s)
+[2026-05-07 15:16:13] [VERBOSE] Workbook sheet imported: WorkOrders = 34 row(s)
+[2026-05-07 15:16:13] [VERBOSE] Workbook sheet imported: WOLinks = 0 row(s)
+[2026-05-07 15:16:13] [VERBOSE] Workbook sheet imported: SecondaryResources = 0 row(s)
+[2026-05-07 15:16:13] [VERBOSE] Workbook sheet imported: Capacity = 0 row(s)
+[2026-05-07 15:16:13] [VERBOSE] Workbook sheet imported: InventoryMovements = 0 row(s)
+[2026-05-07 15:16:13] === Integrity Check started (cross-tab reference validation) ===
+[2026-05-07 15:16:13] === Integrity Check OK - all cross-tab references are consistent ===
+[2026-05-07 15:16:13] Workbook import finished: 316 data rows <- E:\GitHub\Toolbox\ortems_toolbox_export.xlsx
+[2026-05-07 15:16:18] [VERBOSE] UI controls disabled while executing: Test DB connection
+[2026-05-07 15:16:18] Connection test started for database ORTEMS_DEMO on server localhost\SQLEXPRESS
+[2026-05-07 15:16:18] [VERBOSE] Connection string: Driver={SQL Server};Server=localhost\SQLEXPRESS;Database=ORTEMS_DEMO;Trusted_Connection=yes;
+[2026-05-07 15:16:30] [VERBOSE] UI controls disabled while executing: Generate SQL
+[2026-05-07 15:16:30] === Integrity Check started (cross-tab reference validation) ===
+[2026-05-07 15:16:30] === Integrity Check OK - all cross-tab references are consistent ===
+[2026-05-07 15:16:30] B_PERI time mode detected: text
+[2026-05-07 15:16:30] B_VER_ART schema: column for routing_phase not present in this version (optional)
+[2026-05-07 15:16:30] B_VER_ART schema: no FK parent column detected for routing_phase through B_PHAS.NOPHASE
+[2026-05-07 15:16:30] B_VER_ART schema: no FK parent column detected for routing_id through B_PHAS.NOMG
+[2026-05-07 15:16:30] B_VER_ART schema: no FK parent column detected for routing_operation through B_PHAS.OPE
+[2026-05-07 15:16:30] E_GAMME_NOME table not found in this schema - explicit bridge generation skipped.
+[2026-05-07 15:16:30] B_NOME schema: column 'QTEREF' used for qty_base
+[2026-05-07 15:16:31] B_NOME schema: column 'QTENEC' used for qty_nec
+[2026-05-07 15:16:31] B_OF schema: column 'QTE' used for qty_order
+[2026-05-07 15:16:31] B_OF schema: column for mode_util not present in this version (optional)
+[2026-05-07 15:16:31] B_BT schema: column 'BT_OPE' used for operation
+[2026-05-07 15:16:31] B_BT schema: column 'MACHINE' used for machine
+[2026-05-07 15:16:31] B_BT schema: column for item not present in this version (optional)
+[2026-05-07 15:16:31] B_BT schema: column for version not present in this version (optional)
+[2026-05-07 15:16:31] B_BT schema: column for serie not present in this version (optional)
+[2026-05-07 15:16:31] B_BT schema: column 'BT_QTE' used for qty
+[2026-05-07 15:16:31] B_BT schema: column for start_date not present in this version (optional)
+[2026-05-07 15:16:31] B_BT schema: column for end_date not present in this version (optional)
+[2026-05-07 15:16:31] B_BT schema: column 'BT_CODEGEST' used for codegest
+[2026-05-07 15:16:31] B_BT schema: column for status not present in this version (optional)
+[2026-05-07 15:16:31] B_BT schema: column for mode_util not present in this version (optional)
+[2026-05-07 15:16:31] SQL generated successfully. 189643 characters.
+[2026-05-07 15:16:36] [VERBOSE] UI controls disabled while executing: Run SQL on DB
+[2026-05-07 15:16:37] === Integrity Check started (cross-tab reference validation) ===
+[2026-05-07 15:16:37] === Integrity Check OK - all cross-tab references are consistent ===
+[2026-05-07 15:16:42] ERROR (stmt 355) on table [B_VER_ART]: COM Error 0x80020009: [Microsoft][ODBC SQL Server Driver][SQL Server]The UPDATE statement conflicted with the FOREIGN KEY constraint "FK2_B_PART". The conflict occurred in database "ORTEMS_DEMO", table "dbo.B_PHAS".
+[2026-05-07 15:16:42]   HINT: B_VER_ART is pointing an item version to a routing/phase combination that does not exist in B_PHAS. Regenerate SQL with the FK-mapping fix so the real B_VER_ART FK columns mapped to B_PHAS are updated together with NOMG.
+[2026-05-07 15:16:42]   >> IF EXISTS (SELECT 1 FROM B_VER_ART WHERE CODEARTIC='PINION 4G' AND VER_ART='00') |     UPDATE B_VER_ART SET VER_DESC='WARHEAD V3', NOMG='PINION ALTERNATE', VER_EFFET_DEBUT=CONVERT(datetime,'01/01/1995',103), VER_EFFET_FIN=CONVERT(datetime,'01/01/2050',103) WHERE CODEARTIC='PINION 4G' AND VER_ART='00' | ELSE |     INSERT INTO B_VER_ART (CODEARTIC, VER_ART, VER_DESC, NOMG, VER_EFFET_DEBUT, VER_EFFET_FI ...
+[2026-05-07 15:16:42] Transaction ROLLED BACK due to error.
