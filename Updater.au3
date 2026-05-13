@@ -1,8 +1,8 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=Toolbox.ico
 #AutoIt3Wrapper_Res_Description=Updater
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.2
-#AutoIt3Wrapper_Res_ProductName=Work Days Updater
+#AutoIt3Wrapper_Res_Fileversion=1.0.0.3
+#AutoIt3Wrapper_Res_ProductName=Toolbox Updater
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\splash.jpg
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
@@ -31,7 +31,11 @@ $AppName = "Toolbox"
 $sSplashPath = @TempDir & "\splash.jpg"
 FileInstall("splash.jpg", $sSplashPath, 1)
 Sleep(1000)
-$Path = StringReplace($CmdLineRaw,"'","")
+If $CmdLine[0] >= 1 Then
+	$Path = $CmdLine[1]
+Else
+	$Path = StringReplace(StringReplace($CmdLineRaw,"'", ""), '"', "")
+EndIf
 
 ;~ MsgBox(262144,"",$Path & "\" & $AppName & ".tmp")
 ;~ _splash()
@@ -44,7 +48,7 @@ Else
 	Sleep(3000)
 	FileMove($Path & "\" & $AppName & ".tmp",$Path & "\" & $AppName & ".exe",9)
 	Sleep(2000)
-	Run($Path & "\" & $AppName & ".exe")
+	Run('"' & $Path & "\" & $AppName & ".exe" & '"')
 EndIf
 Exit
 
