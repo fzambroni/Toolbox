@@ -1,7 +1,7 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
-#AutoIt3Wrapper_Res_Fileversion=1.1.5.4
+#AutoIt3Wrapper_Res_Fileversion=1.1.5.5
 #AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Icon=Toolbox.ico
@@ -40,6 +40,11 @@ Opt("GUIOnEventMode", 1)
 Opt("MustDeclareVars", 0)
 
 Global $DevBy = "Developed by Fabricio Zambroni"
+
+; Log file is initialized early because the GitHub updater runs before the main UI is created.
+Global $g_sLogDir = @ScriptDir & "\log"
+Global $g_sLogFile = ""
+Global $g_bVerbose = False
 
 ; ----------------------------------------------------------------------------------------------------------------------
 ; Updater - GitHub based
@@ -118,9 +123,7 @@ Global $g_hLV_Mat, $g_hLV_BOM, $g_hLV_WO, $g_hLV_WOL
 Global $g_hLV_SR, $g_hLV_Cap, $g_hLV_Stk
 Global $g_hLog
 Global $g_sIntegrityReport = ""
-Global $g_sLogDir = @ScriptDir & "\log"
-Global $g_sLogFile = ""
-Global $g_bVerbose = False
+; Log globals are initialized before the updater runs.
 Global $g_bFullCleanImport = False
 Global $g_iBusyDepth = 0
 Global $g_aBusyControls[0]
@@ -151,7 +154,7 @@ EndFunc
 Func _CheckGitHubUpdate()
     Local $sCurrentVersion = FileGetVersion(@ScriptFullPath)
     If StringStripWS($sCurrentVersion, 3) = "" Then
-        ConsoleWrite("GitHub update check skipped: local file version could not be read." & @CRLF)
+        _LogConsoleReplacement("GitHub update check skipped: local file version could not be read.")
         Return
     EndIf
 
@@ -163,24 +166,24 @@ Func _CheckGitHubUpdate()
     Local $sLocalTmp = @ScriptDir & "\" & $sAppName & ".tmp"
     Local $sUpdaterFile = @ScriptDir & "\Updater.exe"
 
-    ConsoleWrite("Checking for updates from GitHub version file: " & $sRemoteVersionUrl & @CRLF)
+    _LogConsoleReplacement("Checking for updates from GitHub version file: " & $sRemoteVersionUrl)
 
     Local $sRemoteVersion = _GetGitHubVersionFromTextFile($sRemoteVersionUrl, $sRemoteVersionTmp)
     If StringStripWS($sRemoteVersion, 3) = "" Then
-        ConsoleWrite("GitHub update check skipped: remote version.txt could not be read." & @CRLF)
+        _LogConsoleReplacement("GitHub update check skipped: remote version.txt could not be read.")
         FileDelete($sRemoteVersionTmp)
         Return
     EndIf
 
-    ConsoleWrite("Local version: " & $sCurrentVersion & " | GitHub version: " & $sRemoteVersion & @CRLF)
+    _LogConsoleReplacement("Local version: " & $sCurrentVersion & " | GitHub version: " & $sRemoteVersion)
 
     If _CompareVersions($sRemoteVersion, $sCurrentVersion) <= 0 Then
-        ConsoleWrite("No update required." & @CRLF)
+        _LogConsoleReplacement("No update required.")
         FileDelete($sRemoteVersionTmp)
         Return
     EndIf
 
-    ConsoleWrite("Newer GitHub version found. Downloading: " & $sRemoteExeUrl & @CRLF)
+    _LogConsoleReplacement("Newer GitHub version found. Downloading: " & $sRemoteExeUrl)
 
     If Not _DownloadFile($sRemoteExeUrl, $sRemoteExeTmp) Then
         FileDelete($sRemoteVersionTmp)
@@ -191,21 +194,21 @@ Func _CheckGitHubUpdate()
     ; This prevents installing an older exe when version.txt was updated before Toolbox.exe was published.
     Local $sDownloadedExeVersion = FileGetVersion($sRemoteExeTmp)
     If StringStripWS($sDownloadedExeVersion, 3) = "" Then
-        ConsoleWrite("Update aborted: downloaded executable version could not be read." & @CRLF)
+        _LogConsoleReplacement("Update aborted: downloaded executable version could not be read.")
         FileDelete($sRemoteVersionTmp)
         FileDelete($sRemoteExeTmp)
         Return
     EndIf
 
     If _CompareVersions($sDownloadedExeVersion, $sRemoteVersion) < 0 Then
-        ConsoleWrite("Update aborted: downloaded executable version is older than version.txt. Downloaded=" & $sDownloadedExeVersion & ", version.txt=" & $sRemoteVersion & @CRLF)
+        _LogConsoleReplacement("Update aborted: downloaded executable version is older than version.txt. Downloaded=" & $sDownloadedExeVersion & ", version.txt=" & $sRemoteVersion)
         FileDelete($sRemoteVersionTmp)
         FileDelete($sRemoteExeTmp)
         Return
     EndIf
 
     If _CompareVersions($sDownloadedExeVersion, $sCurrentVersion) <= 0 Then
-        ConsoleWrite("Update aborted: downloaded executable version is not newer. Downloaded=" & $sDownloadedExeVersion & ", Local=" & $sCurrentVersion & @CRLF)
+        _LogConsoleReplacement("Update aborted: downloaded executable version is not newer. Downloaded=" & $sDownloadedExeVersion & ", Local=" & $sCurrentVersion)
         FileDelete($sRemoteVersionTmp)
         FileDelete($sRemoteExeTmp)
         Return
@@ -213,13 +216,13 @@ Func _CheckGitHubUpdate()
 
     FileDelete($sLocalTmp)
     If Not FileCopy($sRemoteExeTmp, $sLocalTmp, 9) Then
-        ConsoleWrite("Update aborted: could not stage downloaded file at " & $sLocalTmp & @CRLF)
+        _LogConsoleReplacement("Update aborted: could not stage downloaded file at " & $sLocalTmp)
         FileDelete($sRemoteVersionTmp)
         FileDelete($sRemoteExeTmp)
         Return
     EndIf
 
-    ConsoleWrite("Update staged at: " & $sLocalTmp & @CRLF)
+    _LogConsoleReplacement("Update staged at: " & $sLocalTmp)
     FileInstall("Updater.exe", $sUpdaterFile, 1)
     Sleep(500)
     Run($sUpdaterFile & " '" & @ScriptDir & "'")
@@ -239,7 +242,7 @@ Func _GetGitHubVersionFromTextFile($sUrl, $sDestination)
     ; version.txt must contain only the version number, for example: 1.1.5.0
     Local $aMatch = StringRegExp($sContent, "^([0-9]+(?:\.[0-9]+){1,3})$", 1)
     If @error Or UBound($aMatch) = 0 Then
-        ConsoleWrite("Invalid version.txt content: " & $sContent & @CRLF)
+        _LogConsoleReplacement("Invalid version.txt content: " & $sContent)
         Return ""
     EndIf
 
@@ -250,7 +253,7 @@ Func _DownloadFile($sUrl, $sDestination)
     FileDelete($sDestination)
     Local $hDownload = InetGet($sUrl, $sDestination, $INET_FORCERELOAD, $INET_DOWNLOADWAIT)
     If @error Or $hDownload = 0 Or Not FileExists($sDestination) Or FileGetSize($sDestination) <= 0 Then
-        ConsoleWrite("Download failed: " & $sUrl & @CRLF)
+        _LogConsoleReplacement("Download failed: " & $sUrl)
         Return False
     EndIf
     Return True
@@ -287,6 +290,30 @@ Func _CompareVersions($sLeft, $sRight)
     Next
 
     Return 0
+EndFunc
+
+Func _IsVerboseLoggingEnabled($sBaseDir = @ScriptDir)
+    Return (IniRead($sBaseDir & "\settings.ini", "Logging", "VerboseMode", "0") = "1")
+EndFunc
+
+Func _LogConsoleReplacement($sMsg, $sBaseDir = @ScriptDir)
+    ; Writes updater diagnostics only when [Logging] VerboseMode=1.
+    If Not _IsVerboseLoggingEnabled($sBaseDir) Then Return
+
+    Local $sLogDirBackup = $g_sLogDir
+    If StringStripWS($sBaseDir, 3) <> "" Then $g_sLogDir = $sBaseDir & "\log"
+
+    Local $sTimestamp = "[" & @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & "]"
+    Local $sLine = $sTimestamp & " [VERBOSE] " & StringReplace(StringReplace(String($sMsg), @CRLF, " "), @LF, " ")
+
+    Local $sLogFile = _EnsureLogFile()
+    Local $hFile = FileOpen($sLogFile, 1)
+    If $hFile <> -1 Then
+        FileWriteLine($hFile, $sLine)
+        FileClose($hFile)
+    EndIf
+
+    $g_sLogDir = $sLogDirBackup
 EndFunc
 
 Func _GetFooterText()
@@ -2833,6 +2860,8 @@ EndFunc
 
 Func _OnVerboseModeChanged()
     If IsDeclared("g_chkVerbose") Then $g_bVerbose = (GUICtrlRead($g_chkVerbose) = $GUI_CHECKED)
+    IniWrite($g_sIniFile, "Logging", "VerboseMode", ($g_bVerbose ? "1" : "0"))
+    ; Keep the legacy SQL key synchronized for backward compatibility with older settings files.
     IniWrite($g_sIniFile, "SQL", "Verbose", ($g_bVerbose ? "1" : "0"))
     _Log("Verbose Mode " & ($g_bVerbose ? "enabled" : "disabled"))
 EndFunc
@@ -6944,7 +6973,7 @@ EndFunc
 Func _EnsureLogFile()
     If Not FileExists($g_sLogDir) Then DirCreate($g_sLogDir)
     If $g_sLogFile = "" Then
-        $g_sLogFile = $g_sLogDir & "\Toolbox_" & @YEAR & @MON & @MDAY & "_" & @HOUR & @MIN & @SEC & ".log"
+        $g_sLogFile = $g_sLogDir & "\log_" & @YEAR & @MON & @MDAY & "_" & @HOUR & @MIN & @SEC & ".txt"
     EndIf
     Return $g_sLogFile
 EndFunc
@@ -6994,7 +7023,7 @@ EndFunc
 ; Create one log file per application opening.
 Func _LogSessionStart()
     Local $sLogFile = _EnsureLogFile()
-    Local $hFile = FileOpen($sLogFile, 2) ; overwrite/create for this session
+    Local $hFile = FileOpen($sLogFile, 1) ; append/create for this session
     If $hFile <> -1 Then
         FileWriteLine($hFile, "========== SESSION STARTED: " & @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & " ==========")
         FileWriteLine($hFile, "Application: " & $TITLE)
@@ -7342,7 +7371,12 @@ Func _SaveSettings()
     If IsDeclared("g_chkClearFirst") Then
         IniWrite($g_sIniFile, "SQL", "ClearFirst",  (GUICtrlRead($g_chkClearFirst)  = $GUI_CHECKED ? "1" : "0"))
         IniWrite($g_sIniFile, "SQL", "Transaction", (GUICtrlRead($g_chkTransaction) = $GUI_CHECKED ? "1" : "0"))
-        If IsDeclared("g_chkVerbose") Then IniWrite($g_sIniFile, "SQL", "Verbose", (GUICtrlRead($g_chkVerbose) = $GUI_CHECKED ? "1" : "0"))
+        If IsDeclared("g_chkVerbose") Then
+            Local $sVerboseMode = (GUICtrlRead($g_chkVerbose) = $GUI_CHECKED ? "1" : "0")
+            IniWrite($g_sIniFile, "Logging", "VerboseMode", $sVerboseMode)
+            ; Legacy setting kept synchronized for compatibility.
+            IniWrite($g_sIniFile, "SQL", "Verbose", $sVerboseMode)
+        EndIf
     EndIf
 
     ; [Window]
@@ -7410,7 +7444,8 @@ Func _LoadSettings()
     Else
         GUICtrlSetState($g_chkTransaction, $GUI_UNCHECKED)
     EndIf
-    $g_bVerbose = (IniRead($g_sIniFile, "SQL", "Verbose", "0") = "1")
+    Local $sVerboseMode = IniRead($g_sIniFile, "Logging", "VerboseMode", IniRead($g_sIniFile, "SQL", "Verbose", "0"))
+    $g_bVerbose = ($sVerboseMode = "1")
     If IsDeclared("g_chkVerbose") Then
         If $g_bVerbose Then
             GUICtrlSetState($g_chkVerbose, $GUI_CHECKED)
