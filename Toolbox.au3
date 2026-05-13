@@ -1,7 +1,7 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
-#AutoIt3Wrapper_Res_Fileversion=1.1.5.1
+#AutoIt3Wrapper_Res_Fileversion=1.1.5.2
 #AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Icon=Toolbox.ico

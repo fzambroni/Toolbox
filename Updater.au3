@@ -1,20 +1,15 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_UseX64=y
+#AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Icon=Toolbox.ico
 #AutoIt3Wrapper_Res_Description=Updater
-#AutoIt3Wrapper_Res_Fileversion=1.0.0.3
+#AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
+#AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
+#AutoIt3Wrapper_Res_Fileversion=1.1.1.4
+#AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
 #AutoIt3Wrapper_Res_ProductName=Toolbox Updater
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\splash.jpg
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
-
-#cs ----------------------------------------------------------------------------
-
- AutoIt Version: 3.3.16.1
- Author:         myName
-
- Script Function:
-	Template AutoIt script.
-
-#ce ----------------------------------------------------------------------------
 #pragma compile(inputboxres, true)
 
 Opt("TrayIconHide", 1)
@@ -36,7 +31,7 @@ If $CmdLine[0] >= 1 Then
 Else
 	$Path = StringReplace(StringReplace($CmdLineRaw,"'", ""), '"', "")
 EndIf
-
+;~ $Path = "E:\Z_Apps\Toolbox"
 ;~ MsgBox(262144,"",$Path & "\" & $AppName & ".tmp")
 ;~ _splash()
 ;~ Sleep(5000)
@@ -62,7 +57,7 @@ Func _splash()
 
 	Global $Pic_Splash = GUICtrlCreatePic($sSplashPath, 5, 5, 630, 350)
 
-	Global $Label_Percentage = GUICtrlCreateLabel("Updating " & $AppName & " . . .", 5, 290, 630, 30, $SS_CENTER)
+	Global $Label_Percentage = GUICtrlCreateLabel("Updating " & $AppName & " . . . Please wait", 5, 330, 630, 25, $SS_CENTER)
 	GUICtrlSetFont($Label_Percentage, 17)
 	GUICtrlSetColor($Label_Percentage, 0xFF0000)
 
