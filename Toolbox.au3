@@ -1,8 +1,9 @@
 #Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=Toolbox.ico
 #AutoIt3Wrapper_UseX64=y
+#AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_Fileversion=1.1.5.6
+#AutoIt3Wrapper_Res_Fileversion=1.1.5.7
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
 #AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
@@ -11,18 +12,6 @@
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Help.html
 #AutoIt3Wrapper_Run_After=E:\GitHub\Toolbox\FileUpdate.exe
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
-#AutoIt3Wrapper_UseX64=y
-#AutoIt3Wrapper_UseUpx=n
-#AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
-#AutoIt3Wrapper_Res_Fileversion=1.1.5.6
-#AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
-#AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
-#AutoIt3Wrapper_Icon=Toolbox.ico
-#AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Updater.exe
-#AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Help.html
-
 
 #NoTrayIcon
 #include <GUIConstantsEx.au3>
