@@ -1,13 +1,14 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
-#AutoIt3Wrapper_Res_Fileversion=1.1.4.5
+#AutoIt3Wrapper_Res_Fileversion=1.1.4.9
 #AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Icon=Toolbox.ico
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Updater.exe
+#AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Help.html
 
 
 #NoTrayIcon
@@ -214,9 +215,14 @@ Func CreateMainWindow()
     ; Connection status
     GUICtrlCreateLabel("Status:", 650, 10, 50, 18)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_lblStatus = GUICtrlCreateLabel("Disconnected", 705, 10, 390, 18);,$SS_BLACKRECT)
+    Global $g_lblStatus = GUICtrlCreateLabel("Disconnected", 705, 10, 345, 18);,$SS_BLACKRECT)
     GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
     GUICtrlSetColor($g_lblStatus, 0xCC0000)
+
+    Global $g_btnHelp = GUICtrlCreateButton("?", $APP_WIDTH - 42, 8, 40, 40)
+    GUICtrlSetOnEvent($g_btnHelp, "_Help_Click")
+    GUICtrlSetFont(-1, 12, 800, 0, "Segoe UI")
+    GUICtrlSetTip(-1,"Help")
 
     ; === ABAS PRINCIPAIS ===
     $g_hTab = GUICtrlCreateTab(5, $TAB_TOP_Y, $APP_WIDTH - 10, $APP_HEIGHT - 130)
@@ -1483,8 +1489,20 @@ Func _ShowRowDialog($sTitle, $aFields, $aValues, $aHints = "", $sSubtitle = "")
     Local $iHeaderH = ($sSubtitle = "" ? 62 : 80)
     Local $iDlgH = $iHeaderH + 10 + $nF * $iRowH + 70
 
+    ; Center the row dialog over the current position of the main window.
+    ; Using -1/-1 here centers on the desktop/default position, which feels wrong
+    ; when the main Toolbox window has been moved to another screen area.
+    Local $iDlgX = -1, $iDlgY = -1
+    If $g_hMain <> 0 Then
+        Local $aMainPos = WinGetPos($g_hMain)
+        If Not @error And IsArray($aMainPos) Then
+            $iDlgX = $aMainPos[0] + Int(($aMainPos[2] - $iDlgW) / 2)
+            $iDlgY = $aMainPos[1] + Int(($aMainPos[3] - $iDlgH) / 2)
+        EndIf
+    EndIf
+
     Local $iPrevOnEvent = Opt("GUIOnEventMode", 0)
-    Local $hDlg = GUICreate($sTitle, $iDlgW, $iDlgH, -1, -1, _
+    Local $hDlg = GUICreate($sTitle, $iDlgW, $iDlgH, $iDlgX, $iDlgY, _
         BitOR($WS_DLGFRAME, $WS_POPUP, $WS_CAPTION), -1, $g_hMain)
     GUISetBkColor(0xF7F7F7, $hDlg)
 
@@ -1584,7 +1602,7 @@ Func _ShowRowDialog($sTitle, $aFields, $aValues, $aHints = "", $sSubtitle = "")
                 Next
                 Local $sValidation = _ValidateDialogInput($sTitle, $aFields, $aResult)
                 If $sValidation <> "" Then
-                    MsgBox(48, "Review required fields", $sValidation)
+                    MsgBox(262144+48, "Review required fields", $sValidation,0,$g_hMain)
                     ContinueLoop
                 EndIf
                 $bOK = True
@@ -1849,7 +1867,7 @@ Func _LV_EditSelectedRow($hLV, $sTitle, $aFields, $aHints = "")
         If $sSel <> "" Then $iSel = Number($sSel)
     EndIf
     If $iSel < 0 Then
-        MsgBox(48, "No row selected", "Please click on a row in the list first, then press Edit.")
+        MsgBox(262144+48, "No row selected", "Please click on a row in the list first, then press Edit.",0,$g_hMain)
         Return False
     EndIf
 
@@ -1904,7 +1922,7 @@ EndFunc
 Func _Cal_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Cal)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_Cal, Number($sSel))
@@ -1956,7 +1974,7 @@ EndFunc
 Func _Mach_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Mach)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_Mach, Number($sSel))
@@ -2004,7 +2022,7 @@ EndFunc
 Func _Ops_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Ops)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_Ops, Number($sSel))
@@ -2047,7 +2065,7 @@ EndFunc
 Func _Rout_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Rout)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_Rout, Number($sSel))
@@ -2091,7 +2109,7 @@ EndFunc
 Func _Mat_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Mat)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_Mat, Number($sSel))
@@ -2136,7 +2154,7 @@ EndFunc
 Func _BOM_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_BOM)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_BOM, Number($sSel))
@@ -2181,7 +2199,7 @@ EndFunc
 Func _WO_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_WO)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_WO, Number($sSel))
@@ -2226,7 +2244,7 @@ EndFunc
 Func _WOL_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_WOL)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_WOL, Number($sSel))
@@ -2269,7 +2287,7 @@ EndFunc
 Func _SR_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_SR)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_SR, Number($sSel))
@@ -2313,7 +2331,7 @@ EndFunc
 Func _Cap_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Cap)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_Cap, Number($sSel))
@@ -2356,7 +2374,7 @@ EndFunc
 Func _Stk_Del()
     Local $sSel = _GUICtrlListView_GetSelectedIndices($g_hLV_Stk)
     If $sSel = "" Then
-        MsgBox(48, "No row selected", "Please select a row first.")
+        MsgBox(262144+48, "No row selected", "Please select a row first.",0,$g_hMain)
         Return
     EndIf
     _GUICtrlListView_DeleteItem($g_hLV_Stk, Number($sSel))
@@ -2436,7 +2454,7 @@ Func _TestConnection()
     Local $sAuth  = GUICtrlRead($g_cmbAuth)
 
     If $g_sServer = "" Or $g_sDatabase = "" Then
-        MsgBox(48, "Error", "Server and database are required.")
+        MsgBox(262144+48, "Error", "Server and database are required.",0,$g_hMain)
         Return
     EndIf
 
@@ -2455,7 +2473,7 @@ Func _TestConnection()
     If Not IsObj($oConn) Then
         GUICtrlSetData($g_lblStatus, "Error: ADO not available")
         GUICtrlSetColor($g_lblStatus, 0xCC0000)
-        MsgBox(16, "Error", "Could not create ADODB.Connection." & @CRLF & "Check that the SQL Server ODBC / OLE DB provider is installed.")
+        MsgBox(262144+16, "Error", "Could not create ADODB.Connection." & @CRLF & "Check that the SQL Server ODBC / OLE DB provider is installed.",0,$g_hMain)
         Return
     EndIf
 
@@ -2476,22 +2494,22 @@ Func _TestConnection()
 
     If $bOK Then
         $g_bConnected = True
-		MsgBox(262144,"","Connected: " & $g_sDatabase & "@" & $g_sServer)
+		MsgBox(262144+262144,"","Connected: " & $g_sDatabase & "@" & $g_sServer,0,$g_hMain)
         GUICtrlSetData($g_lblStatus, "Connected: " & $g_sDatabase & "@" & $g_sServer)
         GUICtrlSetColor($g_lblStatus, 0x007700)
         _SaveSettings()   ; persist server + database immediately
-        MsgBox(64, "Connection", "Successfully connected to the database!" & @CRLF & @CRLF & "Database: " & $g_sDatabase & @CRLF & "Server: " & $g_sServer)
+        MsgBox(262144+64, "Connection", "Successfully connected to the database!" & @CRLF & @CRLF & "Database: " & $g_sDatabase & @CRLF & "Server: " & $g_sServer,0,$g_hMain)
     Else
         $g_bConnected = False
         GUICtrlSetData($g_lblStatus, "Connection error")
         GUICtrlSetColor($g_lblStatus, 0xCC0000)
-        MsgBox(16, "Connection error", "Could not connect to the database." & @CRLF & @CRLF & $sErr & @CRLF & @CRLF & "Connection string used:" & @CRLF & $g_sConnStr)
+        MsgBox(262144+16, "Connection error", "Could not connect to the database." & @CRLF & @CRLF & $sErr & @CRLF & @CRLF & "Connection string used:" & @CRLF & $g_sConnStr,0,$g_hMain)
     EndIf
 EndFunc
 
 Func _InspectTable()
     If Not $g_bConnected Then
-        MsgBox(48, "Not connected", "Test the connection first (tab 1. Database).")
+        MsgBox(262144+48, "Not connected", "Test the connection first (tab 1. Database).",0,$g_hMain)
         Return
     EndIf
 
@@ -2514,7 +2532,7 @@ Func _InspectTable()
 
     If $g_sLastComError <> "" Or Not IsObj($oRS) Then
         $oConn.Close()
-        MsgBox(16, "Error", "Could not query schema: " & $g_sLastComError)
+        MsgBox(262144+16, "Error", "Could not query schema: " & $g_sLastComError,0,$g_hMain)
         Return
     EndIf
 
@@ -2534,9 +2552,9 @@ Func _InspectTable()
     $oConn.Close()
 
     If $nCols = 0 Then
-        MsgBox(48, "Not found", "Table '" & $sTable & "' not found in the database.")
+        MsgBox(262144+48, "Not found", "Table '" & $sTable & "' not found in the database.",0,$g_hMain)
     Else
-        MsgBox(64, "Schema: " & $sTable & " (" & $nCols & " columns)", $sResult)
+        MsgBox(262144+64, "Schema: " & $sTable & " (" & $nCols & " columns)", $sResult,0,$g_hMain)
     EndIf
 EndFunc
 
@@ -2549,6 +2567,11 @@ Func _OnAuthChange()
         GUICtrlSetState($g_edtUser, $GUI_DISABLE)
         GUICtrlSetState($g_edtPass, $GUI_DISABLE)
     EndIf
+EndFunc
+
+Func _Help_Click()
+    FileInstall("Help.html", @ScriptDir & "\Help.html", 1)
+    ShellExecute(@ScriptDir & "\Help.html")
 EndFunc
 
 ;=============================================================================
@@ -4390,21 +4413,21 @@ EndFunc
 
 Func _ExecuteSQL()
     If Not $g_bConnected Then
-        MsgBox(48, "Warning", "You are not connected to the database." & @CRLF & "Go to the '1. Database' tab and test the connection first.")
+        MsgBox(262144+48, "Warning", "You are not connected to the database." & @CRLF & "Go to the '1. Database' tab and test the connection first.",0,$g_hMain)
         Return
     EndIf
 
     Local $sSQL = GUICtrlRead($g_hLog)
     If $sSQL = "" Or StringInStr($sSQL, "INSERT") = 0 Then
-        MsgBox(48, "Warning", "No SQL has been generated yet. Click 'GENERATE SQL' first.")
+        MsgBox(262144+48, "Warning", "No SQL has been generated yet. Click 'GENERATE SQL' first.",0,$g_hMain)
         Return
     EndIf
 
-    Local $nRet = MsgBox(4 + 48, "Confirm execution", _
+    Local $nRet = MsgBox(262144+4 + 48, "Confirm execution", _
         "You are about to run SQL on the database:" & @CRLF & @CRLF & _
         "Database: " & $g_sDatabase & @CRLF & "Server: " & $g_sServer & @CRLF & @CRLF & _
         "This action can DELETE and RECREATE existing data!" & @CRLF & @CRLF & _
-        "Do you want to continue?")
+        "Do you want to continue?",0,$g_hMain)
 
     If $nRet <> 6 Then Return
 
@@ -4422,7 +4445,7 @@ Func _ExecuteSQL()
     $oConn.Open($g_sConnStr)
     If $g_sLastComError <> "" Then
         _Log("ERROR opening connection: " & $g_sLastComError)
-        MsgBox(16, "Connection error", "Could not open connection:" & @CRLF & $g_sLastComError)
+        MsgBox(262144+16, "Connection error", "Could not open connection:" & @CRLF & $g_sLastComError,0,$g_hMain)
         Return
     EndIf
     If $oConn.State <> 1 Then
@@ -4488,7 +4511,7 @@ Func _ExecuteSQL()
                 Local $sMsg = "A SQL error occurred on table [" & $sTbl & "] - the transaction was rolled back." & @CRLF & @CRLF
                 If $sHint <> "" Then $sMsg &= $sHint & @CRLF & @CRLF
                 $sMsg &= "Check the execution log and the session log file for details."
-                MsgBox(16, "Execution error", $sMsg)
+                MsgBox(262144+16, "Execution error", $sMsg,0,$g_hMain)
                 Return
             EndIf
         Else
@@ -4512,9 +4535,9 @@ Func _ExecuteSQL()
     _Log("Execution finished: " & $nOK & " statements OK, " & $nErr & " errors.")
 
     If $nErr = 0 Then
-        MsgBox(64, "Success", "All SQL executed successfully!" & @CRLF & @CRLF & $nOK & " statements executed.")
+        MsgBox(262144+64, "Success", "All SQL executed successfully!" & @CRLF & @CRLF & $nOK & " statements executed.",0,$g_hMain)
     Else
-        MsgBox(48, "Completed with errors", $nOK & " statements OK, " & $nErr & " errors." & @CRLF & "Check the execution log and the session log file for details.")
+        MsgBox(262144+48, "Completed with errors", $nOK & " statements OK, " & $nErr & " errors." & @CRLF & "Check the execution log and the session log file for details.",0,$g_hMain)
     EndIf
 EndFunc
 
@@ -4736,20 +4759,20 @@ Func _IntegrityCheck($p1 = "", $p2 = "", $p3 = "")
     Local $nIssues = _ValidateFKBeforeImport()
     If $nIssues = 0 Then
         If $bShowSuccess Then
-            MsgBox(64, "Integrity Check", _
+            MsgBox(262144+64, "Integrity Check", _
                 "No cross-tab reference issue was found." & @CRLF & @CRLF & _
-                "The data is consistent and ready for SQL generation.")
+                "The data is consistent and ready for SQL generation.",0,$g_hMain)
         EndIf
         Return 0
     EndIf
 
     Local $sMsg = _IntegrityBuildMessage($nIssues)
-    Local $nFixChoice = MsgBox(3 + 48, "Integrity Check", _
+    Local $nFixChoice = MsgBox(262144+3 + 48, "Integrity Check", _
         $sMsg & @CRLF & @CRLF & _
         "Do you want to try automatic correction for simple references now?" & @CRLF & @CRLF & _
         "Yes = try auto-fix" & @CRLF & _
         "No = keep current values" & @CRLF & _
-        "Cancel = stop")
+        "Cancel = stop",0,$g_hMain)
 
     If $nFixChoice = 2 Then Return -1
 
@@ -4758,9 +4781,9 @@ Func _IntegrityCheck($p1 = "", $p2 = "", $p3 = "")
         If $nFixed > 0 Then
             Local $nRemaining = _ValidateFKBeforeImport()
             If $nRemaining = 0 Then
-                MsgBox(64, "Integrity Check", _
+                MsgBox(262144+64, "Integrity Check", _
                     "Automatic correction updated " & $nFixed & " field(s)." & @CRLF & @CRLF & _
-                    "All cross-tab references are now consistent.")
+                    "All cross-tab references are now consistent.",0,$g_hMain)
                 Return 0
             EndIf
 
@@ -4776,10 +4799,10 @@ Func _IntegrityCheck($p1 = "", $p2 = "", $p3 = "")
     If $bAskToContinue Then
         Local $sQuestion = $sMsg
         If $sAction <> "" Then $sQuestion &= @CRLF & @CRLF & "Do you still want to " & $sAction & "?"
-        Local $nRet = MsgBox(4 + 48, "Integrity Check", $sQuestion)
+        Local $nRet = MsgBox(262144+4 + 48, "Integrity Check", $sQuestion,0,$g_hMain)
         If $nRet <> 6 Then Return -1
     ElseIf $nFixChoice = 6 Then
-        MsgBox(48, "Integrity Check", $sMsg)
+        MsgBox(262144+48, "Integrity Check", $sMsg,0,$g_hMain)
     EndIf
 
     Return $nIssues
@@ -5839,13 +5862,13 @@ EndFunc
 
 Func _ClearDatabase()
     If Not $g_bConnected Then
-        MsgBox(48, "Warning", "Not connected to the database.")
+        MsgBox(262144+48, "Warning", "Not connected to the database.",0,$g_hMain)
         Return
     EndIf
 
-    Local $nRet = MsgBox(4 + 16, "Confirm clear", _
+    Local $nRet = MsgBox(262144+4 + 16, "Confirm clear", _
         "WARNING: This action will DELETE ALL demo data from the database!" & @CRLF & @CRLF & _
-        "Database: " & $g_sDatabase & @CRLF & @CRLF & "Do you want to continue?")
+        "Database: " & $g_sDatabase & @CRLF & @CRLF & "Do you want to continue?",0,$g_hMain)
 
     If $nRet <> 6 Then Return
 
@@ -5859,7 +5882,7 @@ Func _ClearDatabase()
     $oConn.Open($g_sConnStr)
     If $g_sLastComError <> "" Or $oConn.State <> 1 Then
         _Log("ERROR opening connection for clear: " & $g_sLastComError)
-        MsgBox(16, "Error", "Could not open connection: " & @CRLF & $g_sLastComError)
+        MsgBox(262144+16, "Error", "Could not open connection: " & @CRLF & $g_sLastComError,0,$g_hMain)
         Return
     EndIf
 
@@ -5885,10 +5908,10 @@ Func _ClearDatabase()
 
     If $nErr = 0 Then
         _Log("Database cleared successfully (" & $nOK & " statements OK).")
-        MsgBox(64, "OK", "Demo data removed from the database successfully.")
+        MsgBox(262144+64, "OK", "Demo data removed from the database successfully.",0,$g_hMain)
     Else
         _Log("Clear completed with " & $nErr & " error(s) - check the session log file for details.")
-        MsgBox(48, "Completed with errors", "Clear finished with " & $nErr & " error(s)." & @CRLF & "Check the execution log and the session log file for details.")
+        MsgBox(262144+48, "Completed with errors", "Clear finished with " & $nErr & " error(s)." & @CRLF & "Check the execution log and the session log file for details.",0,$g_hMain)
     EndIf
 EndFunc
 
@@ -5917,9 +5940,9 @@ Func _ExcelCreateApp()
     $g_sLastComError = ""
     Local $oExcel = ObjCreate("Excel.Application")
     If $g_sLastComError <> "" Or Not IsObj($oExcel) Then
-        MsgBox(16, "Excel export/import", "Microsoft Excel could not be started." & @CRLF & @CRLF & _
+        MsgBox(262144+16, "Excel export/import", "Microsoft Excel could not be started." & @CRLF & @CRLF & _
             "The workbook import/export requires Excel to be installed on this Windows machine." & @CRLF & @CRLF & _
-            "Technical details: " & $g_sLastComError)
+            "Technical details: " & $g_sLastComError,0,$g_hMain)
         Return 0
     EndIf
     $oExcel.Visible = False
@@ -6074,7 +6097,7 @@ Func _ExportExcel()
     $g_sLastComError = ""
     Local $oBook = $oExcel.Workbooks.Add()
     If $g_sLastComError <> "" Or Not IsObj($oBook) Then
-        MsgBox(16, "Export workbook", "Could not create an Excel workbook." & @CRLF & $g_sLastComError)
+        MsgBox(262144+16, "Export workbook", "Could not create an Excel workbook." & @CRLF & $g_sLastComError,0,$g_hMain)
         $oExcel.Quit()
         Return
     EndIf
@@ -6102,12 +6125,12 @@ Func _ExportExcel()
     $oExcel.Quit()
 
     If $sErr <> "" Then
-        MsgBox(16, "Export workbook", "Could not save the workbook." & @CRLF & @CRLF & $sErr)
+        MsgBox(262144+16, "Export workbook", "Could not save the workbook." & @CRLF & @CRLF & $sErr,0,$g_hMain)
         Return
     EndIf
 
     _Log("Workbook export finished: " & $nTotalRows & " data rows -> " & $sFile)
-    MsgBox(64, "Export workbook", "Exported " & $nTotalRows & " data row(s) to:" & @CRLF & $sFile & @CRLF & @CRLF & "Integrity at export: " & $sStatus)
+    MsgBox(262144+64, "Export workbook", "Exported " & $nTotalRows & " data row(s) to:" & @CRLF & $sFile & @CRLF & @CRLF & "Integrity at export: " & $sStatus,0,$g_hMain)
 EndFunc
 
 Func _ImportExcel()
@@ -6121,7 +6144,7 @@ Func _ImportExcel()
     $g_sLastComError = ""
     Local $oBook = $oExcel.Workbooks.Open($sFile, False, True)
     If $g_sLastComError <> "" Or Not IsObj($oBook) Then
-        MsgBox(16, "Import workbook", "Could not open the selected workbook." & @CRLF & @CRLF & $g_sLastComError)
+        MsgBox(262144+16, "Import workbook", "Could not open the selected workbook." & @CRLF & @CRLF & $g_sLastComError,0,$g_hMain)
         $oExcel.Quit()
         Return
     EndIf
@@ -6141,14 +6164,14 @@ Func _ImportExcel()
     If $sErrors <> "" Then
         $oBook.Close(False)
         $oExcel.Quit()
-        MsgBox(16, "Import workbook", "The workbook cannot be imported because its structure does not match the Toolbox export format:" & @CRLF & @CRLF & $sErrors)
+        MsgBox(262144+16, "Import workbook", "The workbook cannot be imported because its structure does not match the Toolbox export format:" & @CRLF & @CRLF & $sErrors,0,$g_hMain)
         Return
     EndIf
 
-    Local $iAns = MsgBox(4 + 32, "Import workbook", _
+    Local $iAns = MsgBox(262144+4 + 32, "Import workbook", _
         "This will replace the rows currently loaded in all data tabs with the contents of the selected workbook." & @CRLF & @CRLF & _
         "File:" & @CRLF & $sFile & @CRLF & @CRLF & _
-        "Continue?")
+        "Continue?",0,$g_hMain)
     If $iAns <> 6 Then
         $oBook.Close(False)
         $oExcel.Quit()
@@ -6170,10 +6193,10 @@ Func _ImportExcel()
     Local $sMsg = "Imported " & $nTotalRows & " data row(s) from:" & @CRLF & $sFile
     If $nIssues > 0 Then
         $sMsg &= @CRLF & @CRLF & "Integrity check found " & $nIssues & " issue(s). Review the execution log or click Integrity Check to fix simple references."
-        MsgBox(48, "Import workbook", $sMsg)
+        MsgBox(262144+48, "Import workbook", $sMsg,0,$g_hMain)
     Else
         $sMsg &= @CRLF & @CRLF & "Integrity check passed."
-        MsgBox(64, "Import workbook", $sMsg)
+        MsgBox(262144+64, "Import workbook", $sMsg,0,$g_hMain)
     EndIf
 EndFunc
 
@@ -6309,9 +6332,9 @@ Func _LV_ExportCSVInteractive($hLV, $sDefaultName)
     If StringRight($sFile, 4) <> ".csv" Then $sFile &= ".csv"
     Local $n = _LV_ExportCSVToFile($hLV, $sFile)
     If $n < 0 Then
-        MsgBox(16, "Export CSV", "Failed to write file: " & $sFile)
+        MsgBox(262144+16, "Export CSV", "Failed to write file: " & $sFile,0,$g_hMain)
     Else
-        MsgBox(64, "Export CSV", "Exported " & $n & " rows to:" & @CRLF & $sFile)
+        MsgBox(262144+64, "Export CSV", "Exported " & $n & " rows to:" & @CRLF & $sFile,0,$g_hMain)
     EndIf
 EndFunc
 
@@ -6319,18 +6342,18 @@ EndFunc
 Func _LV_ImportCSVInteractive($hLV, $sName)
     Local $sFile = FileOpenDialog("Import CSV for " & $sName, @WorkingDir, "CSV (*.csv)|All (*.*)", 1)
     If @error Or $sFile = "" Then Return
-    Local $iAns = MsgBox(4 + 32 + 3, "Import CSV", _
+    Local $iAns = MsgBox(262144+4 + 32 + 3, "Import CSV", _
         "Replace existing rows?" & @CRLF & @CRLF & _
         "Yes = replace all rows in this tab" & @CRLF & _
         "No  = append to existing rows" & @CRLF & _
-        "Cancel = abort")
+        "Cancel = abort",0,$g_hMain)
     If $iAns = 2 Then Return  ; cancel
     Local $bReplace = ($iAns = 6)
     Local $n = _LV_ImportCSVFromFile($hLV, $sFile, $bReplace)
     If $n < 0 Then
-        MsgBox(16, "Import CSV", "Failed to read file: " & $sFile)
+        MsgBox(262144+16, "Import CSV", "Failed to read file: " & $sFile,0,$g_hMain)
     Else
-        MsgBox(64, "Import CSV", "Imported " & $n & " rows from:" & @CRLF & $sFile)
+        MsgBox(262144+64, "Import CSV", "Imported " & $n & " rows from:" & @CRLF & $sFile,0,$g_hMain)
     EndIf
 EndFunc
 
@@ -6410,14 +6433,14 @@ EndFunc
 ;=============================================================================
 Func _LoadFromDB()
     If Not $g_bConnected Then
-        MsgBox(48, "Not connected", "Connect to a database first (tab 1. Database).")
+        MsgBox(262144+48, "Not connected", "Connect to a database first (tab 1. Database).",0,$g_hMain)
         Return
     EndIf
 
-    Local $nRet = MsgBox(4 + 64, "Load from DB", _
+    Local $nRet = MsgBox(262144+4 + 64, "Load from DB", _
         "This will CLEAR all data in the tabs and reload from the database:" & @CRLF & @CRLF & _
         "  " & $g_sDatabase & " @ " & $g_sServer & @CRLF & @CRLF & _
-        "Continue?")
+        "Continue?",0,$g_hMain)
     If $nRet <> 6 Then Return
 
     Local $oConn = ObjCreate("ADODB.Connection")
@@ -6429,7 +6452,7 @@ Func _LoadFromDB()
     $oConn.Open($g_sConnStr)
     If $g_sLastComError <> "" Or $oConn.State <> 1 Then
         _Log("ERROR opening connection for load: " & $g_sLastComError)
-        MsgBox(16, "Error", "Could not open connection: " & @CRLF & $g_sLastComError)
+        MsgBox(262144+16, "Error", "Could not open connection: " & @CRLF & $g_sLastComError,0,$g_hMain)
         Return
     EndIf
 
@@ -6447,8 +6470,8 @@ Func _LoadFromDB()
 
     $oConn.Close()
     _Log("=== Load from DB complete - " & $nTabs & " tab(s) populated ===")
-    MsgBox(64, "Load complete", "Data loaded from database successfully." & @CRLF & @CRLF & _
-        $nTabs & " tab(s) were populated." & @CRLF & "Check the execution log for row counts.")
+    MsgBox(262144+64, "Load complete", "Data loaded from database successfully." & @CRLF & @CRLF & _
+        $nTabs & " tab(s) were populated." & @CRLF & "Check the execution log for row counts.",0,$g_hMain)
 EndFunc
 
 ; Helper: open a recordset, return 0 on error
@@ -6771,14 +6794,14 @@ EndFunc
 Func _SaveSQL()
     Local $sSQL = GUICtrlRead($g_hLog)
     If $sSQL = "" Then
-        MsgBox(48, "Warning", "No SQL to save. Click 'GENERATE SQL' first.")
+        MsgBox(262144+48, "Warning", "No SQL to save. Click 'GENERATE SQL' first.",0,$g_hMain)
         Return
     EndIf
     Local $sFile = FileSaveDialog("Save SQL", @WorkingDir, "SQL (*.sql)|All (*.*)", 16, "ortems_demo.sql")
     If $sFile <> "" Then
         FileWrite($sFile, $sSQL)
         _Log("SQL saved to: " & $sFile)
-        MsgBox(64, "Saved", "SQL saved successfully to:" & @CRLF & $sFile)
+        MsgBox(262144+64, "Saved", "SQL saved successfully to:" & @CRLF & $sFile,0,$g_hMain)
     EndIf
 EndFunc
 
@@ -6916,8 +6939,8 @@ Func _RefreshModuleFlags($bSilent = True)
         If $g_bModCROUT Then $sMods &= " COMPLEX-ROUT"
         If $sMods = "" Then $sMods = " (none)"
 
-        MsgBox(64, "Modules applied", "Mode: " & $sMode & @CRLF & "Enabled modules:" & $sMods & @CRLF & @CRLF & _
-            "The data tabs have been enabled/disabled according to your selections.")
+        MsgBox(262144+64, "Modules applied", "Mode: " & $sMode & @CRLF & "Enabled modules:" & $sMods & @CRLF & @CRLF & _
+            "The data tabs have been enabled/disabled according to your selections.",0,$g_hMain)
     EndIf
 EndFunc
 
@@ -7087,6 +7110,8 @@ Func _LayoutMain($w, $h)
     ; Bottom separator line
     If $g_idBottomLine <> 0 Then GUICtrlSetPos($g_idBottomLine, 0, $bottomBarTop + 5, $w, 2)
 
+    If IsDeclared("g_btnHelp") Then GUICtrlSetPos($g_btnHelp, $w - 42, 8, 40, 40)
+
     ; Bottom toolbar buttons
     Local $yBtn = $bottomBarTop + 12
     If IsDeclared("g_btnImportXLS") Then GUICtrlSetPos($g_btnImportXLS, 10,  $yBtn, 132, 32)
@@ -7153,7 +7178,7 @@ EndFunc
 
 Func _OnClose()
     _SaveSettings()
-    Local $nRet = MsgBox(4 + 32, "Exit", "Do you want to exit Ortems Toolbox?" & @CRLF & @CRLF & "Unsaved data will be lost.")
+    Local $nRet = MsgBox(262144+4 + 32, "Exit", "Do you want to exit Ortems Toolbox?" & @CRLF & @CRLF & "Unsaved data will be lost.",0,$g_hMain)
     If $nRet = 6 Then Exit
 EndFunc
 
