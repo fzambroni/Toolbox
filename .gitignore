@@ -1,3 +1,4 @@
 *.ini
 *.xls*
 /Olds
+/log
