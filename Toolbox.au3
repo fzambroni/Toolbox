@@ -1,7 +1,7 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
-#AutoIt3Wrapper_Res_Fileversion=1.1.5.3
+#AutoIt3Wrapper_Res_Fileversion=1.1.5.4
 #AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Icon=Toolbox.ico
@@ -158,10 +158,10 @@ Func _CheckGitHubUpdate()
     Local $sAppName = _FileNameWithoutExtension(@ScriptName)
     Local $sRemoteVersionUrl = _JoinUrl($g_sGitHubRawBase, "version.txt")
     Local $sRemoteExeUrl = _JoinUrl($g_sGitHubRawBase, @ScriptName)
-    Local $sRemoteVersionTmp = @TempDir & "\" & $sAppName & "_github_version.txt"
-    Local $sRemoteExeTmp = @TempDir & "\" & $sAppName & "_github_latest.exe"
+    Local $sRemoteVersionTmp = @ScriptDir & "\" & $sAppName & "_github_version.txt"
+    Local $sRemoteExeTmp = @ScriptDir & "\" & $sAppName & "_github_latest.exe"
     Local $sLocalTmp = @ScriptDir & "\" & $sAppName & ".tmp"
-    Local $sUpdaterFile = @TempDir & "\Updater.exe"
+    Local $sUpdaterFile = @ScriptDir & "\Updater.exe"
 
     ConsoleWrite("Checking for updates from GitHub version file: " & $sRemoteVersionUrl & @CRLF)
 
