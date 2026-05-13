@@ -1,7 +1,20 @@
+#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#AutoIt3Wrapper_Icon=Toolbox.ico
+#AutoIt3Wrapper_UseX64=y
+#AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
+#AutoIt3Wrapper_Res_Fileversion=1.1.5.6
+#AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
+#AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
+#AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
+#AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
+#AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Updater.exe
+#AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Help.html
+#AutoIt3Wrapper_Run_After=E:\GitHub\Toolbox\FileUpdate.exe
+#EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
-#AutoIt3Wrapper_Res_Fileversion=1.1.5.5
+#AutoIt3Wrapper_Res_Fileversion=1.1.5.6
 #AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Icon=Toolbox.ico
@@ -207,15 +220,17 @@ Func _CheckGitHubUpdate()
         Return
     EndIf
 
+
     If _CompareVersions($sDownloadedExeVersion, $sCurrentVersion) <= 0 Then
         _LogConsoleReplacement("Update aborted: downloaded executable version is not newer. Downloaded=" & $sDownloadedExeVersion & ", Local=" & $sCurrentVersion)
         FileDelete($sRemoteVersionTmp)
         FileDelete($sRemoteExeTmp)
         Return
-    EndIf
+EndIf
+;~ #ce
 
     FileDelete($sLocalTmp)
-    If Not FileCopy($sRemoteExeTmp, $sLocalTmp, 9) Then
+    If Not FileMove($sRemoteExeTmp, $sLocalTmp, 9) Then
         _LogConsoleReplacement("Update aborted: could not stage downloaded file at " & $sLocalTmp)
         FileDelete($sRemoteVersionTmp)
         FileDelete($sRemoteExeTmp)

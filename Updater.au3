@@ -28,7 +28,7 @@ Func _UpdaterVerboseLog($sMsg)
 	; Replacement-safe verbose log. It only writes when [Logging] VerboseMode=1.
 	If Not _UpdaterVerboseModeEnabled() Then Return
 
-	Local $sLogDir = $g_sUpdaterLogBaseDir & "\log"
+	Local $sLogDir = $g_sUpdaterLogBaseDir & "\log_Updater"
 	If Not FileExists($sLogDir) Then DirCreate($sLogDir)
 	If $g_sUpdaterLogFile = "" Then $g_sUpdaterLogFile = $sLogDir & "\log_" & @YEAR & @MON & @MDAY & "_" & @HOUR & @MIN & @SEC & ".txt"
 
@@ -46,14 +46,18 @@ $AppName = "Toolbox"
 ;####################################################
 ;####################################################
 
-$sSplashPath = @TempDir & "\splash.jpg"
+$sSplashPath = @ScriptDir & "\splash.jpg"
 FileInstall("splash.jpg", $sSplashPath, 1)
 Sleep(1000)
+
+#cs
 If $CmdLine[0] >= 1 Then
 	$Path = $CmdLine[1]
 Else
 	$Path = StringReplace(StringReplace($CmdLineRaw,"'", ""), '"', "")
 EndIf
+#ce
+$Path = @ScriptDir
 $g_sUpdaterLogBaseDir = $Path
 _UpdaterVerboseLog("Updater started. Application path: " & $Path)
 ;~ $Path = "E:\Z_Apps\Toolbox"
@@ -63,6 +67,7 @@ _UpdaterVerboseLog("Updater started. Application path: " & $Path)
 
 If Not FileExists($Path & "\" & $AppName & ".tmp") Then
 	_UpdaterVerboseLog("Update aborted: staged file not found: " & $Path & "\" & $AppName & ".tmp")
+	FileDelete($sSplashPath)
 	Exit
 Else
 	_UpdaterVerboseLog("Staged file found. Starting replacement.")
@@ -72,12 +77,15 @@ Else
 		_UpdaterVerboseLog("Replacement completed: " & $Path & "\" & $AppName & ".exe")
 	Else
 		_UpdaterVerboseLog("Replacement failed. Source=" & $Path & "\" & $AppName & ".tmp" & " | Target=" & $Path & "\" & $AppName & ".exe")
+		FileDelete($sSplashPath)
 		Exit
 	EndIf
 	Sleep(2000)
 	_UpdaterVerboseLog("Restarting application: " & $Path & "\" & $AppName & ".exe")
 	Run('"' & $Path & "\" & $AppName & ".exe" & '"')
+
 EndIf
+FileDelete($sSplashPath)
 Exit
 
 Func _splash()
