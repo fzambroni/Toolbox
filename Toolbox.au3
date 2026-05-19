@@ -3,9 +3,9 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_Fileversion=1.1.6.0
+#AutoIt3Wrapper_Res_Fileversion=1.1.6.2
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_ProductVersion=1.1.1.1
+#AutoIt3Wrapper_Res_ProductVersion=1.1.6.2
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Updater.exe
@@ -67,7 +67,7 @@ Global Const $TITLE       = "Ortems Toolbox"
 Global Const $APP_WIDTH   = 1100
 Global Const $APP_HEIGHT  = 720
 Global Const $COL_W       = 140
-Global Const $ORTEMS_DEFAULT_NOM_ENC = "ENCOURS" ; default Ortems en-cours/plan key used by E_OF.NOM_ENC and B_BT.NOM_ENC
+Global Const $ORTEMS_DEFAULT_NOM_ENC = "ENCOURS" ; default Ortems en-cours/plan key used by Ortems launch/WIP tables when WOs are launched
 
 ; === GLOBAL STATE VARIABLES ===
 Global $g_sServer   = ""
@@ -2778,42 +2778,39 @@ Func _GenerateSQL()
     $sSQL &= _GenerateBOMSQL() & @CRLF
 
     ; Required Ortems reference/master rows used by generated Work Orders.
-    ; Global cleanup clears reference tables such as B_SER, so they must be
-    ; recreated before E_OF/B_OF/B_BT are inserted.
+    ; Global cleanup clears reference tables such as B_SER/ENCOURS, so they must
+    ; be recreated before B_OF is inserted and before Ortems later launches WOs.
     $sSQL &= "-- ===== ORTEMS REFERENCE DATA REQUIRED BY WORK ORDERS =====" & @CRLF
     $sSQL &= _GenerateWOReferenceDataSQL() & @CRLF
 
     ; Targeted work-order cleanup
-    ; When refreshing an existing demo database without full Clear first, old B_BT/B_OF rows
-    ; can keep FK references against E_OF and block the parent update. Clean only the WOs
-    ; present in the Work Orders tab, then recreate them below.
+    ; When refreshing an existing demo database without full Clear first, old launch/WIP
+    ; rows can make Ortems fail native Launching with E_OF_EXISTS. Clean only the WOs
+    ; present in the Work Orders tab, then recreate their B_OF rows below.
     If Not $bClear Then
         $sSQL &= "-- ===== TARGETED WORK ORDER CLEANUP =====" & @CRLF
         $sSQL &= _GenerateTargetedWOCleanupSQL() & @CRLF
     EndIf
 
-    ; Work order header / parent rows
-    ; Some Ortems SQL Server schemas validate B_BT through E_OF, not only B_OF.
-    $sSQL &= "-- ===== WORK ORDER HEADERS (E_OF) =====" & @CRLF
-    $sSQL &= _GenerateWOHeaderSQL() & @CRLF
-
-    ; Ordens de Producao
-    $sSQL &= "-- ===== WORK ORDERS (B_OF) =====" & @CRLF
+    ; Work Orders are imported as launchable/planned orders only.
+    ; Do NOT pre-create E_OF or B_BT here. In Ortems, those rows belong to the
+    ; launch/WIP side of the model and are created by the native Launching flow.
+    ; Pre-creating them makes Launching WOs fail with E_OF_EXISTS.
+    $sSQL &= "-- ===== WORK ORDERS (B_OF - LAUNCHABLE, NOT PRE-LAUNCHED) =====" & @CRLF
+    $sSQL &= "-- E_OF/B_BT are intentionally not inserted. Ortems will create them when the WOs are launched." & @CRLF
     $sSQL &= _GenerateWOSQL() & @CRLF
 
-    ; Ortems requires phase rows for each WO. Without B_BT rows, the application can raise PL_0170.
-    $sSQL &= "-- ===== WORK ORDER PHASES (B_BT) =====" & @CRLF
-    $sSQL &= _GenerateWOBTSQL() & @CRLF
-
-    ; WO Links (se modulo ativo)
+    ; WO Links depend on launched operation rows in B_BT/B_PROF in this Ortems schema.
+    ; Since this import keeps WOs launchable instead of pre-launched, inserting B_PROF
+    ; now can create orphan WIP links or block the Launching process.
     If $g_bModWOL Then
-        $sSQL &= "-- ===== LINKS WO (B_PROF) =====" & @CRLF
-        $sSQL &= _GenerateWOLSQL() & @CRLF
+        $sSQL &= "-- ===== WO LINKS (B_PROF) =====" & @CRLF
+        $sSQL &= "-- Skipped in launchable WO import mode. Create/refresh WO links after Ortems has launched the WOs and generated B_BT rows." & @CRLF
     EndIf
 
     ; Re-enable triggers and FK constraints only after all workbook rows were inserted.
     ; Keeping them disabled during the import avoids intermediate FK conflicts while
-    ; E_OF/B_OF/B_BT and related Ortems tables are being rebuilt.
+    ; Ortems reference/master data and B_OF rows are being rebuilt.
     If $bClear Then
         $sSQL &= "-- ===== POST-IMPORT CONSTRAINT/TRIGGER RE-ENABLE =====" & @CRLF
         $sSQL &= _GetPostImportEnableSQLScript() & @CRLF
@@ -3878,13 +3875,13 @@ Func _GenerateTargetedWOCleanupSQL()
     ; ENC_CAD can reference B_BT in some Ortems schemas (for example through FK1_ENC_CAD).
     ; It must be removed before B_BT, otherwise the B_BT cleanup can be blocked.
 
-    ; Main WO phase/header rows. B_BT must be removed before E_OF can be safely updated.
+    ; Main WO/WIP rows. B_BT and launch-side rows must be removed before B_OF is recreated.
+    ; Otherwise Ortems can later refuse the native Launching flow with E_OF_EXISTS.
     _AppendTargetedDeleteForColumns($s, "B_BT",    $sWOCols, $sWOInList)
     _AppendTargetedDeleteForColumns($s, "B_OF",    "NOF;E_NOF;NUMOF;NUM_OF;NO_OF;N_OF;OF;ID_OF", $sWOInList)
+    _AppendTargetedDeleteForColumns($s, "E_OF",    "NOF;E_NOF;NUMOF;NUM_OF;NO_OF;N_OF;OF;ID_OF", $sWOInList)
 
-    ; Do not delete E_OF here. After B_BT/B_OF are cleaned, _GenerateWOHeaderSQL() can update
-    ; the existing E_OF row safely, preserving any columns outside the Toolbox mapping.
-    _Log("Targeted WO cleanup generated for imported Work Orders. Existing ENC_CAD/B_BT/B_OF rows for those WOs will be refreshed before E_OF is updated.")
+    _Log("Targeted WO cleanup generated for imported Work Orders. Existing launch/WIP rows (ENC_CAD/B_BT/E_OF) and B_OF rows for those WOs will be refreshed so Ortems can launch them cleanly.")
     _LogVerbose("Targeted WO cleanup IN-list contains " & _CountSQLInListValues($sWOInList) & " Work Order(s).")
     _LogVerboseSQL("Generated targeted WO cleanup SQL", $s)
     Return $s
@@ -3914,9 +3911,10 @@ Func _GenerateSingleWOCleanupSQL($sWO)
     ; ENC_CAD can reference B_BT in some Ortems schemas (for example through FK1_ENC_CAD).
     ; It must be removed before B_BT, otherwise the B_BT cleanup can be blocked.
 
-    ; Main WO rows. B_BT must be removed before updating E_OF, otherwise FK1_B_BT can block it.
+    ; Main WO/WIP rows. Remove launch-side rows too, otherwise Ortems can later fail Launching with E_OF_EXISTS.
     _AppendTargetedDeleteForColumns($s, "B_BT",    $sWOCols, $sOneWOInList)
     _AppendTargetedDeleteForColumns($s, "B_OF",    "NOF;E_NOF;NUMOF;NUM_OF;NO_OF;N_OF;OF;ID_OF", $sOneWOInList)
+    _AppendTargetedDeleteForColumns($s, "E_OF",    "NOF;E_NOF;NUMOF;NUM_OF;NO_OF;N_OF;OF;ID_OF", $sOneWOInList)
 
     _LogVerboseSQL("Generated defensive single-WO cleanup SQL for " & $sWOValue, $s)
     Return $s

@@ -43,7 +43,7 @@ Func _CheckGitHubUpdate()
     Local $sLocalTmp = @ScriptDir & "\" & $sAppName & ".tmp"
     Local $sUpdaterFile = @ScriptDir & "\Updater.exe"
 
-	FileDelete($sUpdaterFile)
+;~ 	FileDelete($sUpdaterFile)
 
 ;~     _LogConsoleReplacement("Checking for updates from GitHub version file: " & $sRemoteVersionUrl)
 
