@@ -3,9 +3,9 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_Fileversion=1.1.6.2
+#AutoIt3Wrapper_Res_Fileversion=1.1.6.3
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_ProductVersion=1.1.6.2
+#AutoIt3Wrapper_Res_ProductVersion=1.1.6.3
 #AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
 #AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Updater.exe
@@ -48,6 +48,21 @@ Global $DevBy = "Developed by Fabricio Zambroni"
 Global $g_sLogDir = @ScriptDir & "\log"
 Global $g_sLogFile = ""
 Global $g_bVerbose = False
+
+;Splash Screen
+Global $splashWin_X = 640
+Global $splashWin_Y = 360
+Global $WinPos_X = -1
+Global $WinPos_Y = -1
+Global $Label_Percentage = "0%"
+Global $Progress_Splash = "0"
+Global $sSplashPath = @ScriptDir & "\splash.jpg"
+FileInstall("splash.jpg", $sSplashPath, 1)
+_splash("on")
+Sleep(200)
+GUICtrlSetData($Label_Percentage, "30%")
+GUICtrlSetData($Progress_Splash, 30)
+Sleep(300)
 
 
 Global $GitHubAppName = "Toolbox"
@@ -181,6 +196,7 @@ Main()
 Func Main()
     CreateMainWindow()
     _LoadSettings()
+	_splash("off")
     GUISetState(@SW_SHOW, $g_hMain)
     _LogSessionStart()
     _RefreshModuleFlags(True)
@@ -201,6 +217,11 @@ Func CreateMainWindow()
     GUISetOnEvent($GUI_EVENT_RESIZED, "_OnResize")
     GUIRegisterMsg($WM_GETMINMAXINFO, "_WM_GETMINMAXINFO")
     GUIRegisterMsg($WM_NOTIFY, "_WM_NOTIFY")
+
+
+	GUICtrlSetData($Label_Percentage, "60%")
+GUICtrlSetData($Progress_Splash, 60)
+Sleep(500)
 
     ; Barra de titulo/logo
     GUICtrlCreateLabel("ORTEMS TOOLBOX", 10, 8, 170, 26)
@@ -318,6 +339,11 @@ Func CreateMainWindow()
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
     GUICtrlSetBkColor($g_btnClearDB, 0xFFDDDD)
     _RegisterBusyControl($g_btnClearDB)
+
+
+	GUICtrlSetData($Label_Percentage, "90%")
+GUICtrlSetData($Progress_Splash, 90)
+Sleep(400)
 
     Global $g_btnGenerate = GUICtrlCreateButton("Generate SQL", 520, $APP_HEIGHT - 58, 118, 32)
     GUICtrlSetOnEvent($g_btnGenerate, "_GenerateSQL_Click")
@@ -7308,3 +7334,39 @@ Func _LoadSettings()
     If $iY < 0 Or $iY > $iSH - 100 Then $iY = -1
     If $iX <> -1 Then WinMove($g_hMain, "", $iX, $iY, $iW, $iH)
 EndFunc
+
+Func _splash($Mode = "on")
+
+	If $Mode = "on" Then
+
+		$splashWin_X = 640
+		$splashWin_Y = 360
+
+		If $WinPos_X = -1 And $WinPos_Y = -1 Then
+			Global $Form_Splash = GUICreate("", $splashWin_X, $splashWin_Y, -1, -1, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW, $WS_EX_LAYERED))
+		Else
+			Global $Form_Splash = GUICreate("", $splashWin_X, $splashWin_Y, $WinPos_X, $WinPos_Y, $WS_POPUP, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW, $WS_EX_LAYERED))
+		EndIf
+
+		Global $Pic_Splash = GUICtrlCreatePic($sSplashPath, 5, 5, 630, 350)
+
+		Global $Progress_Splash = GUICtrlCreateProgress(104, 288, 430, 17)
+		Global $Label_Percentage = GUICtrlCreateLabel("0%", 540, 290, 100, -1, $SS_SIMPLE)
+		GUICtrlSetColor($Label_Percentage, 0xFFFFFF)
+		GUICtrlSetBkColor($Label_Percentage, 0x5b90b2)
+		Global $Label_version = GUICtrlCreateLabel(FileGetVersion(@ScriptFullPath), 560, 330, -1, -1, $SS_SIMPLE)
+		GUICtrlSetColor($Label_version, 0xFFFFFF)
+		GUICtrlSetBkColor($Label_version, 0x5b90b2)
+;~ 		Global $Button_Close_Splash = GUICtrlCreateCheckbox("X", 605, 15, 20, 20, $BS_PUSHLIKE)
+;~ 		GUICtrlDelete($Button_Close_Splash)
+		GUISetState(@SW_SHOW, $Form_Splash)
+
+		Return
+	Else
+		If $Mode = "off" Then
+			GUIDelete($Form_Splash)
+			GUISetState(@SW_SHOW, $g_hMain)
+			Return
+		EndIf
+	EndIf
+EndFunc   ;==>_splash
