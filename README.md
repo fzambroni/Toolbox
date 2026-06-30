@@ -1,45 +1,45 @@
 # Ortems Toolbox
 
-**Ortems Toolbox** é uma aplicação Windows criada em AutoIt para montar, revisar, validar e importar dados de demonstração em uma base **Ortems SQL Server**.
+**Ortems Toolbox** is a Windows application built with AutoIt to create, review, validate, and import demonstration data into an **Ortems SQL Server** database.
 
-A ferramenta substitui o fluxo antigo baseado em planilha macro, oferecendo uma interface tabulada para cadastro de calendários, máquinas, operações, roteiros, itens, BOM, ordens de produção, recursos secundários, capacidade e movimentos de estoque. Depois que os dados são preenchidos, o app gera um script SQL estruturado e pode executá-lo diretamente no banco conectado.
+The tool replaces the older macro-based spreadsheet workflow with a tabbed interface for maintaining calendars, machines, operations, routings, items, BOMs, work orders, secondary resources, capacity data, and inventory movements. Once the data is prepared, the application generates a structured SQL script and can execute it directly against the connected database.
 
-> ⚠️ **Uso recomendado:** bases de demonstração, treinamento, sandbox ou ambientes clonados. Não execute em banco produtivo sem backup, revisão do SQL gerado e validação com o responsável pelo ambiente.
-
----
-
-## Visão geral
-
-O Toolbox foi pensado para acelerar a preparação de bases Ortems, especialmente quando é necessário criar rapidamente um cenário de planejamento para demo, treinamento, prova de conceito ou validação funcional.
-
-Principais objetivos:
-
-- reduzir a dependência de planilhas Excel com macros;
-- facilitar a criação de dados Ortems consistentes;
-- validar referências antes da importação;
-- gerar SQL de forma rastreável;
-- permitir importação/exportação em workbook Excel para round-trip;
-- preservar as Work Orders em estado **lançável**, sem pré-criar registros de WIP/lançamento.
+> ⚠️ **Recommended use:** demo, training, sandbox, or cloned environments. Do not run this tool against a production database without a backup, a full review of the generated SQL, and validation from the environment owner.
 
 ---
 
-## Funcionalidades
+## Overview
 
-### Conexão com SQL Server
+The Toolbox was designed to speed up the preparation of Ortems databases, especially when a planning scenario needs to be created quickly for a demo, training session, proof of concept, or functional validation.
 
-- Conexão com banco Ortems SQL Server.
-- Suporte a:
+Main goals:
+
+- reduce dependency on Excel macro workbooks;
+- make Ortems demo data easier to create and maintain;
+- validate references before importing data;
+- generate traceable SQL scripts;
+- support Excel workbook import/export for round-trip editing;
+- keep Work Orders in a **launchable** state, without pre-creating WIP/launch records.
+
+---
+
+## Features
+
+### SQL Server connection
+
+- Connects to an Ortems SQL Server database.
+- Supports:
   - Windows Authentication;
   - SQL Server Authentication.
-- Exibição da connection string ativa.
-- Teste de conexão via `ADODB.Connection`.
-- Ferramenta **Inspect Table** para visualizar colunas de uma tabela Ortems e ajudar no troubleshooting de diferenças de schema.
+- Displays the active connection string.
+- Tests the connection using `ADODB.Connection`.
+- Includes an **Inspect Table** utility to view Ortems table columns and troubleshoot schema differences.
 
-### Seleção de módulos Ortems
+### Ortems module selection
 
-A aba **Modules** permite configurar o escopo funcional do cenário:
+The **Modules** tab defines the functional scope of the scenario:
 
-- **PS - Production Scheduling** ou **MP - Master Planning**;
+- **PS - Production Scheduling** or **MP - Master Planning**;
 - **SRP**;
 - **WO Links**;
 - **Complex Routings**;
@@ -50,149 +50,149 @@ A aba **Modules** permite configurar o escopo funcional do cenário:
 - **Limited Resources**;
 - **Parameters**.
 
-As abas são habilitadas ou bloqueadas automaticamente de acordo com os módulos selecionados.
+Tabs are enabled or locked automatically based on the selected modules.
 
-### Edição dos dados pela interface
+### Data editing interface
 
-Cada aba possui botões para:
+Each data tab includes actions to:
 
-- adicionar linha;
-- editar linha selecionada;
-- excluir linha selecionada;
-- excluir todas as linhas da aba;
-- importar CSV;
-- exportar CSV;
-- carregar exemplos.
+- add a row;
+- edit the selected row;
+- delete the selected row;
+- delete all rows from the tab;
+- import CSV;
+- export CSV;
+- load sample data.
 
-As principais abas são:
+Main tabs:
 
-| Aba | Finalidade | Principais tabelas Ortems envolvidas |
+| Tab | Purpose | Main Ortems tables involved |
 |---|---|---|
-| Calendars | Calendários e períodos de trabalho | `B_CAL`, `B_PERI` |
-| Machines | Sites, centros de trabalho, seções e máquinas | `B_ZONE`, `B_ILOT`, `B_SECT`, `B_MACH` |
-| Operations | Operações e cadências por máquina | `B_OPE`, `B_CADE` |
-| Routings | Gamas/roteiros e fases | `B_GAMM`, `B_PHAS` |
-| Items | Itens, versões e roteiros de produção | `B_ART`, `B_VER_ART`, `E_GAMME_NOME` quando aplicável |
-| BOM | Estrutura de produto | `B_NOME` |
-| Work Orders | Ordens de produção planejadas/lançáveis | `B_OF` |
-| WO Links | Relações de precedência entre WOs/operações | `B_PROF`, quando aplicável após lançamento |
-| Secondary Resources | Recursos secundários por operação | tabelas auxiliares de recursos, conforme schema |
-| Capacity | Calendários de capacidade | tabelas de capacidade conforme schema |
-| Inventory Movements | Movimentos de estoque | tabelas de estoque conforme schema |
+| Calendars | Calendars and working periods | `B_CAL`, `B_PERI` |
+| Machines | Sites, work centers, sections, and machines | `B_ZONE`, `B_ILOT`, `B_SECT`, `B_MACH` |
+| Operations | Operations and machine rates | `B_OPE`, `B_CADE` |
+| Routings | Routings and phases | `B_GAMM`, `B_PHAS` |
+| Items | Items, item versions, and production routings | `B_ART`, `B_VER_ART`, `E_GAMME_NOME` when applicable |
+| BOM | Product structure | `B_NOME` |
+| Work Orders | Planned/launchable production orders | `B_OF` |
+| WO Links | Precedence relationships between WOs/operations | `B_PROF`, when applicable after launching |
+| Secondary Resources | Secondary resources by operation | Resource-related auxiliary tables, depending on the schema |
+| Capacity | Capacity calendars | Capacity-related tables, depending on the schema |
+| Inventory Movements | Inventory transactions | Inventory-related tables, depending on the schema |
 
-### Importação e exportação Excel
+### Excel import and export
 
-O app permite exportar um workbook estruturado com as abas de dados e importar esse mesmo workbook de volta.
+The application can export a structured workbook with all data tabs and import that same workbook back into the tool.
 
-Regras importantes:
+Important rules:
 
-- não renomeie as abas geradas;
-- não altere os cabeçalhos;
-- os dados são tratados como texto para evitar conversões automáticas de data/hora pelo Excel;
-- a coluna `Line` é regenerada pelo app durante a importação.
+- do not rename the generated sheets;
+- do not change the headers;
+- data is treated as text to prevent Excel from automatically converting dates and times;
+- the `Line` column is regenerated by the application during import.
 
-O workbook exportado contém uma aba `README` com status de integridade no momento da exportação.
+The exported workbook includes a `README` sheet with the integrity status at the time of export.
 
-### Validação de integridade
+### Integrity validation
 
-Antes de gerar ou executar SQL, o Toolbox executa uma validação cruzada entre as abas. Exemplos:
+Before generating or executing SQL, the Toolbox performs cross-tab validation. Examples include:
 
-- operações apontando para centros de trabalho e máquinas existentes;
-- roteiros apontando para operações existentes;
-- itens manufaturados apontando para roteiros válidos;
-- BOM apontando para itens, versões e roteiros válidos;
-- Work Orders apontando para itens e roteiros válidos;
-- movimentos de estoque apontando para itens válidos;
-- formatos de calendário, capacidade e datas.
+- operations pointing to existing work centers and machines;
+- routings pointing to existing operations;
+- manufactured items pointing to valid routings;
+- BOM rows pointing to valid items, versions, and routings;
+- Work Orders pointing to valid items and routings;
+- inventory movements pointing to valid items;
+- calendar, capacity, and date format checks.
 
-Quando possível, o app oferece correções automáticas simples, como normalização de referências por diferença de maiúsculas/minúsculas, espaços ou seleção única possível.
+When possible, the app offers simple automatic fixes, such as reference normalization when the only issue is case, extra spaces, or a single obvious match.
 
-### Geração e execução de SQL
+### SQL generation and execution
 
-A aba **Generate & Run SQL** permite:
+The **Generate & Run SQL** tab allows you to:
 
-- gerar o SQL completo;
-- revisar o script antes da execução;
-- executar no banco conectado;
-- salvar o script em arquivo `.sql`;
-- consultar o log de execução.
+- generate the full SQL script;
+- review the script before execution;
+- execute it on the connected database;
+- save the script as a `.sql` file;
+- review the execution log.
 
-Por padrão, o SQL é executado dentro de transação. Em caso de erro, o app tenta fazer rollback para evitar banco parcialmente carregado.
+By default, SQL execution runs inside a transaction. If an error occurs, the app attempts to roll back the transaction to avoid leaving the database partially loaded.
 
 ---
 
-## Comportamento atual das Work Orders
+## Current Work Order behavior
 
-A versão atual importa Work Orders como ordens **lançáveis**, criando registros em `B_OF`.
+The current version imports Work Orders as **launchable** orders by creating records in `B_OF`.
 
-Ela **não** pré-cria registros em `E_OF` nem em `B_BT`.
+It does **not** pre-create records in `E_OF` or `B_BT`.
 
-Isso é intencional.
+This is intentional.
 
-No Ortems, `E_OF` e `B_BT` pertencem ao lado de lançamento/WIP do modelo e devem ser criados pelo fluxo nativo de **Launching** do próprio Ortems. Quando esses registros são criados manualmente durante a importação, o Ortems pode entender que a WO já existe no WIP e retornar erros como:
+In Ortems, `E_OF` and `B_BT` belong to the launch/WIP side of the model and should be created by Ortems through the native **Launching** process. When those records are created manually during import, Ortems may interpret the WO as already existing in WIP and return errors such as:
 
 ```text
 E_OF_EXISTS
 ```
 
-Por isso, o fluxo correto é:
+The expected flow is:
 
-1. importar os dados pelo Toolbox;
-2. abrir o Ortems;
-3. revisar as Work Orders;
-4. lançar as Work Orders pelo processo nativo do Ortems.
+1. import data through the Toolbox;
+2. open Ortems;
+3. review the Work Orders;
+4. launch the Work Orders using the native Ortems launching process.
 
 ### WO Links
 
-Os links entre Work Orders dependem de linhas operacionais lançadas, normalmente associadas a `B_BT`/`B_PROF`, dependendo da versão/schema Ortems.
+Links between Work Orders depend on launched operational lines, usually associated with `B_BT`/`B_PROF`, depending on the Ortems version and schema.
 
-Como o Toolbox mantém as WOs em modo lançável, os WO Links são pulados durante a importação de WOs não lançadas. Se o cenário exigir links por operação, crie ou atualize esses vínculos depois que o Ortems tiver lançado as WOs e gerado as linhas correspondentes.
-
----
-
-## Modo de clean import
-
-A versão atual força um modo de importação limpa global para evitar resíduos antigos no banco de demonstração.
-
-Durante a geração do SQL, o app:
-
-1. desabilita constraints em todas as tabelas de usuário;
-2. verifica se alguma FK continuou habilitada;
-3. desabilita triggers;
-4. apaga os dados de todas as tabelas de usuário não sistêmicas;
-5. valida se as tabelas ficaram vazias;
-6. recria os dados necessários ao cenário;
-7. recria dados de referência exigidos pelas Work Orders, como série e en-cours padrão;
-8. reabilita triggers;
-9. revalida constraints.
-
-> ⚠️ Esse processo é destrutivo. Ele foi desenhado para bases de demo/sandbox. Faça backup antes de executar.
+Because the Toolbox keeps WOs in a launchable state, WO Links are skipped during the import of non-launched WOs. If the scenario requires operation-level links, create or update those links after Ortems has launched the WOs and generated the corresponding operational lines.
 
 ---
 
-## Requisitos
+## Clean import mode
 
-### Para executar
+The current version forces a global clean import mode to avoid old residual data in demo databases.
 
-- Windows 10 ou superior.
-- Acesso a uma base Ortems em SQL Server.
-- SQL Server ODBC/OLE DB provider disponível na máquina.
-- Permissões de banco suficientes para:
-  - conectar;
-  - inserir/atualizar/deletar dados;
-  - desabilitar/reabilitar constraints e triggers, quando o clean import for usado.
-- Microsoft Excel instalado, apenas se for usar importação/exportação de workbook.
+During SQL generation, the application:
 
-### Para compilar
+1. disables constraints on all user tables;
+2. checks whether any foreign key remains enabled;
+3. disables triggers;
+4. deletes data from all non-system user tables;
+5. validates that the tables are empty;
+6. recreates the scenario data;
+7. recreates reference data required by Work Orders, such as the default series and WIP/en-cours reference;
+8. re-enables triggers;
+9. revalidates constraints.
+
+> ⚠️ This process is destructive. It was designed for demo/sandbox databases. Always create a backup before running it.
+
+---
+
+## Requirements
+
+### To run
+
+- Windows 10 or later.
+- Access to an Ortems SQL Server database.
+- SQL Server ODBC/OLE DB provider available on the machine.
+- Sufficient database permissions to:
+  - connect;
+  - insert/update/delete data;
+  - disable/re-enable constraints and triggers when clean import is used.
+- Microsoft Excel installed, only if workbook import/export is required.
+
+### To compile
 
 - AutoIt 3.
-- SciTE4AutoIt3 ou AutoIt3Wrapper.
-- Compilação x64 habilitada.
-- Arquivos auxiliares do projeto na mesma pasta do código-fonte.
+- SciTE4AutoIt3 or AutoIt3Wrapper.
+- x64 compilation enabled.
+- Project support files stored in the same folder as the source code.
 
 ---
 
-## Estrutura sugerida do repositório
+## Suggested repository structure
 
 ```text
 .\Toolbox
@@ -207,21 +207,21 @@ Durante a geração do SQL, o app:
 └── .gitignore
 ```
 
-Arquivos gerados em runtime, como `settings.ini`, logs e arquivos exportados, não devem ser versionados.
+Runtime-generated files, such as `settings.ini`, logs, exported workbooks, and generated SQL files, should not be committed.
 
 ---
 
-## Como compilar
+## How to compile
 
-1. Clone ou copie o projeto para uma pasta local:
+1. Clone or copy the project to a local folder:
 
    ```text
    .\Toolbox
    ```
 
-2. Abra `Toolbox.au3` no SciTE/AutoIt.
+2. Open `Toolbox.au3` in SciTE/AutoIt.
 
-3. Garanta que os arquivos auxiliares estejam na mesma pasta:
+3. Make sure all support files are in the same folder:
 
    ```text
    .\Updater_lib2.au3
@@ -232,7 +232,7 @@ Arquivos gerados em runtime, como `settings.ini`, logs e arquivos exportados, n�
    .\FileUpdate.exe
    ```
 
-4. Antes de publicar ou compilar para distribuição, use caminhos relativos nas diretivas do AutoIt3Wrapper. Exemplo:
+4. Before publishing or compiling for distribution, use relative paths in the AutoIt3Wrapper directives. Example:
 
    ```autoit
    #AutoIt3Wrapper_Res_File_Add=.\Updater.exe
@@ -240,34 +240,34 @@ Arquivos gerados em runtime, como `settings.ini`, logs e arquivos exportados, n�
    #AutoIt3Wrapper_Run_After=.\FileUpdate.exe
    ```
 
-5. Compile como x64.
+5. Compile as x64.
 
-6. Gere um release contendo o executável final e, se necessário para o modelo de atualização usado no projeto, os arquivos de suporte do updater.
+6. Create a release containing the final executable and, if required by the project update model, the updater support files.
 
 ---
 
-## Como usar
+## How to use
 
-### 1. Conectar ao banco
+### 1. Connect to the database
 
-1. Abra o Toolbox.
-2. Na aba **Database**, informe:
+1. Open the Toolbox.
+2. On the **Database** tab, enter:
    - Server / Instance;
    - Database name;
-   - tipo de autenticação.
-3. Clique em **DB Connect**.
-4. Confirme que o status mudou para conectado.
+   - authentication type.
+3. Click **DB Connect**.
+4. Confirm that the status changed to connected.
 
-### 2. Selecionar módulos
+### 2. Select modules
 
-1. Vá para a aba **Modules**.
-2. Selecione PS ou MP.
-3. Marque os módulos necessários para o cenário.
-4. Clique em **Apply / Show Summary**, se quiser revisar o escopo.
+1. Go to the **Modules** tab.
+2. Select PS or MP.
+3. Enable the modules required for the scenario.
+4. Click **Apply / Show Summary** if you want to review the selected scope.
 
-### 3. Preencher dados
+### 3. Enter data
 
-Preencha as abas na sequência lógica:
+Fill the tabs in the logical order:
 
 1. Calendars;
 2. Machines;
@@ -276,43 +276,43 @@ Preencha as abas na sequência lógica:
 5. Items;
 6. BOM;
 7. Work Orders;
-8. módulos opcionais, quando aplicável.
+8. optional modules, when applicable.
 
-Você também pode usar **Load Example** para criar uma base inicial de exemplo e depois ajustar os dados.
+You can also use **Load Example** to create a starter dataset and then adjust it to your scenario.
 
-### 4. Validar integridade
+### 4. Validate integrity
 
-Clique em **Integrity Check**.
+Click **Integrity Check**.
 
-Corrija os problemas indicados antes de gerar o SQL. Quando o app oferecer auto-fix, revise o resultado antes de continuar.
+Fix the reported issues before generating SQL. When the app offers an auto-fix, review the result before continuing.
 
-### 5. Gerar SQL
+### 5. Generate SQL
 
-Clique em **Generate SQL**.
+Click **Generate SQL**.
 
-Revise o conteúdo na aba **Generate & Run SQL**. Essa etapa é importante porque o script pode deletar e recriar dados da base conectada.
+Review the script in the **Generate & Run SQL** tab. This step matters because the script may delete and recreate data in the connected database.
 
-### 6. Executar no banco
+### 6. Execute on the database
 
-Clique em **Run on DB**.
+Click **Run on DB**.
 
-Confirme a execução apenas se o banco conectado for o banco correto e se houver backup ou possibilidade de recriação do ambiente.
+Confirm execution only after verifying that the connected database is the correct one and that a backup or rebuild option is available.
 
-### 7. Abrir no Ortems
+### 7. Open Ortems
 
-Depois da execução bem-sucedida:
+After successful execution:
 
-1. abra o Ortems;
-2. verifique os dados importados;
-3. lance as Work Orders pelo fluxo nativo do Ortems.
+1. open Ortems;
+2. verify the imported data;
+3. launch the Work Orders using the native Ortems process.
 
 ---
 
-## Arquivo `settings.ini`
+## `settings.ini`
 
-O app cria automaticamente um arquivo `settings.ini` na mesma pasta do executável/código.
+The application automatically creates a `settings.ini` file in the same folder as the executable/source code.
 
-Exemplo:
+Example:
 
 ```ini
 [Connection]
@@ -348,83 +348,83 @@ W=1100
 H=720
 ```
 
-Notas:
+Notes:
 
-- o arquivo é local por máquina/usuário;
-- não publique esse arquivo no GitHub;
-- a senha não deve ser versionada;
-- para troubleshooting, ative `VerboseMode=1` ou marque **Verbose Mode** na interface.
+- this file is local to each machine/user;
+- do not publish this file to GitHub;
+- passwords must not be committed;
+- for troubleshooting, enable `VerboseMode=1` or turn on **Verbose Mode** in the interface.
 
 ---
 
-## Logs e troubleshooting
+## Logs and troubleshooting
 
-Os logs são gravados em:
+Logs are written to:
 
 ```text
 .\log
 ```
 
-Use **Verbose Mode** quando precisar investigar:
+Use **Verbose Mode** when investigating:
 
-- erro de conexão;
-- coluna não encontrada em alguma tabela Ortems;
-- erro de FK;
-- rollback de transação;
-- problema na geração de SQL;
-- erro durante clean import.
+- connection errors;
+- missing columns in Ortems tables;
+- foreign key errors;
+- transaction rollbacks;
+- SQL generation issues;
+- clean import failures.
 
-O modo verbose registra detalhes adicionais, incluindo consultas de detecção de schema e comandos executados.
+Verbose mode records additional details, including schema detection queries and executed commands.
 
-### Erro `E_OF_EXISTS` ao lançar WOs
+### `E_OF_EXISTS` when launching WOs
 
-Esse erro normalmente indica que a base já contém registros de lançamento/WIP relacionados à mesma WO.
+This error usually means that the database already contains launch/WIP records related to the same WO.
 
-A versão atual evita esse problema por design:
+The current version avoids this issue by design:
 
-- cria a WO em `B_OF`;
-- não cria `E_OF`;
-- não cria `B_BT`;
-- limpa resíduos antigos durante o clean import.
+- it creates the WO in `B_OF`;
+- it does not create `E_OF`;
+- it does not create `B_BT`;
+- it cleans old residual data during clean import.
 
-Se o erro continuar acontecendo, confirme que:
+If the error still occurs, confirm that:
 
-1. você está usando a versão atual do app;
-2. o SQL foi gerado novamente depois da atualização;
-3. a importação foi executada com sucesso;
-4. não há customização externa recriando `E_OF` ou `B_BT` antes do lançamento no Ortems;
-5. o log não indica falha no clean import ou rollback.
+1. you are using the current version of the application;
+2. the SQL was regenerated after the update;
+3. the import completed successfully;
+4. no external customization is recreating `E_OF` or `B_BT` before Ortems launching;
+5. the log does not show a clean import failure or transaction rollback.
 
-### Erro de FK após importação
+### Foreign key error after import
 
-Verifique:
+Check whether:
 
-- se todas as abas passaram no **Integrity Check**;
-- se os IDs estão escritos exatamente como esperado;
-- se a versão/schema do Ortems possui nomes de colunas diferentes;
-- se o log verbose mostra alguma coluna não detectada;
-- se o banco tinha triggers/customizações específicas.
+- all tabs passed **Integrity Check**;
+- IDs are written exactly as expected;
+- the Ortems version/schema uses different column names;
+- the verbose log shows any column that could not be detected;
+- the database has specific triggers or customizations.
 
-### Excel não abre na importação/exportação
+### Excel does not open during import/export
 
-A importação/exportação de workbook usa automação COM do Microsoft Excel. O Excel precisa estar instalado na máquina Windows que executa o app.
-
----
-
-## Boas práticas
-
-- Use sempre uma base clonada ou de demonstração.
-- Faça backup antes de executar **Run on DB**.
-- Gere e revise o SQL antes de rodar.
-- Mantenha nomes de IDs simples, estáveis e sem caracteres especiais desnecessários.
-- Preencha os dados na ordem lógica: calendário → máquina → operação → roteiro → item → BOM → WO.
-- Use **Integrity Check** antes de qualquer execução.
-- Ative **Verbose Mode** antes de reproduzir um erro.
-- Não versionar `settings.ini`, logs, workbooks de cliente ou exports com dados sensíveis.
+Workbook import/export uses Microsoft Excel COM automation. Excel must be installed on the Windows machine running the application.
 
 ---
 
-## `.gitignore` sugerido
+## Best practices
+
+- Always use a cloned or demo database.
+- Create a backup before running **Run on DB**.
+- Generate and review the SQL before executing it.
+- Keep IDs simple, stable, and free from unnecessary special characters.
+- Enter data in the logical order: calendar → machine → operation → routing → item → BOM → WO.
+- Run **Integrity Check** before any database execution.
+- Enable **Verbose Mode** before reproducing an error.
+- Do not commit `settings.ini`, logs, customer workbooks, or exports containing sensitive data.
+
+---
+
+## Suggested `.gitignore`
 
 ```gitignore
 # Runtime settings
@@ -452,57 +452,57 @@ log/
 Thumbs.db
 ```
 
-> Se você quiser publicar binários pelo GitHub Releases, mantenha os `.exe` fora do repositório principal e anexe-os ao release.
+> If you want to publish binaries through GitHub Releases, keep `.exe` files out of the main repository and attach them to the release instead.
 
 ---
 
-## Segurança e privacidade
+## Security and privacy
 
-Antes de publicar este projeto:
+Before publishing this project:
 
-- remova caminhos absolutos da sua máquina;
-- use apenas caminhos relativos, como `.\Toolbox`;
-- não publique `settings.ini`;
-- não publique logs reais de clientes;
-- não publique exports Excel/CSV/SQL contendo dados sensíveis;
-- revise metadados do executável antes de distribuir;
-- valide se o updater não contém tokens, URLs privadas ou credenciais.
-
----
-
-## Limitações conhecidas
-
-- Aplicação Windows-only.
-- Requer SQL Server e provider ODBC/OLE DB disponível.
-- Import/export Excel requer Microsoft Excel instalado.
-- O schema Ortems pode variar entre versões; o app tenta detectar colunas dinamicamente, mas schemas muito customizados podem exigir ajuste no código.
-- WO Links por operação não são aplicados durante importação de WOs lançáveis; eles devem ser tratados depois que o Ortems criar as linhas de lançamento.
-- O clean import é destrutivo e não deve ser usado em produção.
+- remove absolute paths from your machine;
+- use only relative paths, such as `.\Toolbox`;
+- do not publish `settings.ini`;
+- do not publish real customer logs;
+- do not publish Excel/CSV/SQL exports containing sensitive data;
+- review executable metadata before distribution;
+- validate that the updater does not contain tokens, private URLs, or credentials.
 
 ---
 
-## Roadmap sugerido
+## Known limitations
 
-Ideias para evolução futura:
-
-- opção de modo não destrutivo para refresh parcial;
-- tela dedicada para diagnóstico de schema Ortems;
-- relatório HTML de integridade;
-- exportação/importação JSON além de Excel/CSV;
-- suporte mais completo a WO Links pós-lançamento;
-- tela de preview do impacto no banco antes do `Run on DB`;
-- testes automatizados para geração SQL por módulo.
+- Windows-only application.
+- Requires SQL Server and an available ODBC/OLE DB provider.
+- Excel import/export requires Microsoft Excel to be installed.
+- The Ortems schema may vary across versions. The app attempts to detect columns dynamically, but heavily customized schemas may require code adjustments.
+- Operation-level WO Links are not applied during the import of launchable WOs. They should be handled after Ortems creates the launch lines.
+- Clean import is destructive and should not be used in production.
 
 ---
 
-## Licença
+## Suggested roadmap
 
-Defina a licença antes de publicar o projeto.
+Possible future improvements:
 
-Sugestão: incluir um arquivo `LICENSE` na raiz do repositório e atualizar esta seção com o nome da licença escolhida.
+- non-destructive mode for partial refreshes;
+- dedicated Ortems schema diagnostics screen;
+- HTML integrity report;
+- JSON import/export in addition to Excel/CSV;
+- fuller support for post-launch WO Links;
+- database impact preview before **Run on DB**;
+- automated tests for SQL generation by module.
 
 ---
 
-## Aviso
+## License
 
-Este projeto manipula diretamente tabelas de banco Ortems SQL Server. Use com cuidado, sempre em ambiente controlado, e revise o SQL gerado antes da execução.
+Define the license before publishing the project.
+
+Suggested action: add a `LICENSE` file to the repository root and update this section with the selected license name.
+
+---
+
+## Disclaimer
+
+This project directly manipulates Ortems SQL Server database tables. Use it carefully, always in a controlled environment, and review the generated SQL before execution.
