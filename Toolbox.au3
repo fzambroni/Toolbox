@@ -3,9 +3,9 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_Fileversion=1.1.6.6
+#AutoIt3Wrapper_Res_Fileversion=1.1.6.7
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_ProductVersion=1.1.6.6
+#AutoIt3Wrapper_Res_ProductVersion=1.1.6.7
 #AutoIt3Wrapper_Res_CompanyName=Ortems Toolbox
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Ortems Toolbox
 #AutoIt3Wrapper_Res_File_Add=.\Updater.exe
@@ -539,7 +539,14 @@ Func _CreateTabModules()
     GUICtrlSetBkColor($g_btnApplyMod, 0xDDEEFF)
     _RegisterBusyControl($g_btnApplyMod)
 
-    Global $g_lblModHint = GUICtrlCreateLabel("  OK  Tabs are updated automatically when you change a selection.", 230, $y + 6, 660, 18)
+    Global $g_btnDetectMod = GUICtrlCreateButton("Detect from DB", 230, $y, 140, 28)
+    GUICtrlSetOnEvent($g_btnDetectMod, "_DetectModules_Click")
+    GUICtrlSetFont(-1, 9, 700, 0, "Segoe UI")
+    GUICtrlSetBkColor($g_btnDetectMod, 0xE2F0D9)
+    GUICtrlSetTip($g_btnDetectMod, "Read Ortems BUSINESS_CONFIG and core data tables to auto-select PS/MP and optional modules")
+    _RegisterBusyControl($g_btnDetectMod)
+
+    Global $g_lblModHint = GUICtrlCreateLabel("  OK  Tabs are updated automatically when you change a selection or load/detect from DB.", 385, $y + 6, 520, 18)
     GUICtrlSetFont(-1, 9, 400, 2, "Segoe UI")
     GUICtrlSetColor(-1, 0x007700)
 EndFunc
@@ -2595,6 +2602,175 @@ Func _LoadDatabaseNames()
     _Log("Database list loaded successfully (" & UBound($aNames) & " database(s) found).")
     MsgBox(262144+64, "Database list", UBound($aNames) & " database(s) loaded." & @CRLF & @CRLF & _
         "Open the Database name drop-down and select the target Ortems database.",0,$g_hMain)
+
+EndFunc
+
+;=============================================================================
+; DATABASE MODULE DETECTION
+;=============================================================================
+; Ortems stores several module/runtime options in BUSINESS_CONFIG.
+; The most reliable PS-vs-MP discriminator found in the reference databases is:
+;   BUSINESS_CONFIG.PARAM_SECTION = 'OPERATEURS'
+;   BUSINESS_CONFIG.PARAM_ID      = 'PREASSIGN_OPERATORS_DURING_SCHEDULING'
+; That parameter is documented in Ortems data as "PS only".  MP databases with SRP
+; keep LOAD_LEVELING / SRP parameters, but do not carry this PS scheduling option.
+;
+; SRP is detected from BUSINESS_CONFIG.PARAM_SECTION = 'SRP' or MRP parameters whose
+; PARAM_ID contains SRP.  Data-table counts are used as fallback evidence only.
+Func _DetectModulesFromConnectedDB()
+    If Not $g_bConnected Or StringStripWS($g_sConnStr, 3) = "" Then
+        MsgBox(262144+48, "Detect modules", "Connect to an Ortems database first (tab 1. Database).",0,$g_hMain)
+        Return False
+    EndIf
+
+    Local $oConn = ObjCreate("ADODB.Connection")
+    If Not IsObj($oConn) Then
+        MsgBox(262144+16, "Detect modules", "Could not create ADODB.Connection.",0,$g_hMain)
+        Return False
+    EndIf
+
+    $g_sLastComError = ""
+    $oConn.Open($g_sConnStr)
+    If $g_sLastComError <> "" Or $oConn.State <> 1 Then
+        MsgBox(262144+16, "Detect modules", "Could not open the database connection." & @CRLF & @CRLF & $g_sLastComError,0,$g_hMain)
+        Return False
+    EndIf
+
+    Local $bOK = _DetectModulesFromDB($oConn, False)
+    $oConn.Close()
+    Return $bOK
+EndFunc
+
+Func _DetectModulesFromDB($oConn, $bSilent = True)
+    If Not IsObj($oConn) Then Return False
+
+    _Log("Detecting Ortems modules from database metadata and BUSINESS_CONFIG...")
+
+    ; PS evidence: BUSINESS_CONFIG rows that are only used by the PS scheduling engine.
+    Local $nPSOperatorParam = _DB_CountRowsIfTableExists($oConn, "BUSINESS_CONFIG", "PARAM_SECTION='OPERATEURS' AND PARAM_ID='PREASSIGN_OPERATORS_DURING_SCHEDULING'")
+    Local $nPSOptimizerParam = _DB_CountRowsIfTableExists($oConn, "BUSINESS_CONFIG", "PARAM_SECTION='SCHEDULING' AND PARAM_ID IN ('OPTIMIZER_AUTO','CONFLICT_CHOICE_PRIORITY_BATCH')")
+
+    ; Fallback PS evidence from actual executable routing / launched-operation data.
+    Local $nPSGamm = _DB_CountRowsIfTableExists($oConn, "B_GAMM", "ISNULL(NOMG,'') <> '' AND NOMG <> 'MP'")
+    Local $nPSPhas = _DB_CountRowsIfTableExists($oConn, "B_PHAS", "ISNULL(NOMG,'') <> '' AND NOMG <> 'MP'")
+    Local $nPSBT   = _DB_CountRowsIfTableExists($oConn, "B_BT")
+
+    ; MP evidence: load-leveling / bucket-planning configuration.  This can also
+    ; exist in PS+SRP databases, so it is used only after PS-specific evidence.
+    Local $nMPLoadLeveling = _DB_CountRowsIfTableExists($oConn, "BUSINESS_CONFIG", "PARAM_SECTION='LOAD_LEVELING' AND PARAM_ID LIKE 'LEVELING:%'")
+    Local $nMPDummyRouting = _DB_CountRowsIfTableExists($oConn, "B_GAMM", "NOMG='MP'")
+
+    ; SRP evidence: native SRP section or MRP parameters that explicitly refer to SRP.
+    Local $nSRPParam = _DB_CountRowsIfTableExists($oConn, "BUSINESS_CONFIG", "PARAM_SECTION='SRP' OR (PARAM_SECTION='MRP' AND PARAM_ID LIKE '%SRP%')")
+    Local $nSRPData  = _DB_CountRowsIfTableExists($oConn, "B_NOME_ECLAT") + _DB_CountRowsIfTableExists($oConn, "E_GROSS_REQ") + _DB_CountRowsIfTableExists($oConn, "E_NET_REQ")
+
+    Local $bPS = False
+    Local $bMP = False
+    If ($nPSOperatorParam + $nPSOptimizerParam) > 0 Then
+        ; Strongest evidence: Ortems PS-only BUSINESS_CONFIG parameters.
+        $bPS = True
+    ElseIf ($nMPLoadLeveling + $nMPDummyRouting) > 0 Then
+        ; If PS-only parameters are absent but load-leveling / MP routing evidence exists,
+        ; treat the database as MP.  This prevents historical B_BT/B_OF data from making
+        ; an MP+SRP database look like PS.
+        $bMP = True
+    ElseIf ($nPSGamm + $nPSPhas + $nPSBT) > 0 Then
+        ; Last resort for older/trimmed databases where BUSINESS_CONFIG is incomplete.
+        $bPS = True
+    Else
+        ; No strong evidence either way. Keep the current PS/MP choice instead of guessing.
+        $bPS = $g_bModPS
+        $bMP = $g_bModMP
+        _Log("Module detection warning: no strong PS/MP evidence found. Keeping current mode: " & ($bPS ? "PS" : "MP"))
+    EndIf
+    If Not $bPS And Not $bMP Then $bMP = True
+
+    Local $bSRP = (($nSRPParam + $nSRPData) > 0)
+
+    ; Optional feature evidence.  These are intentionally conservative and data-driven.
+    Local $bWOL   = ($bPS And (_DB_CountRowsIfTableExists($oConn, "B_PROF") > 0))
+    Local $bSR    = ($bPS And (($nPSOperatorParam > 0) Or (_DB_CountRowsIfTableExists($oConn, "B_OPE_SER") > 0) Or (_DB_CountRowsIfTableExists($oConn, "B_S_SER") > 0)))
+    Local $bINV   = ((_DB_CountRowsIfTableExists($oConn, "B_STOC") + _DB_CountRowsIfTableExists($oConn, "B_STOC_NRJ") + _DB_CountRowsIfTableExists($oConn, "I_STOC")) > 0)
+    Local $bMRK   = (_DB_CountRowsIfTableExists($oConn, "B_MARQ") > 0)
+    Local $bLR    = ($bMP Or ((_DB_CountRowsIfTableExists($oConn, "B_CAPA_MACH") + _DB_CountRowsIfTableExists($oConn, "P_MACH_CAPA") + _DB_CountRowsIfTableExists($oConn, "MACH_PLAN_CAP")) > 0))
+    Local $bPRM   = ((_DB_CountRowsIfTableExists($oConn, "B_PARM") + _DB_CountRowsIfTableExists($oConn, "B_MTPA") + _DB_CountRowsIfTableExists($oConn, "B_MTPA2") + _DB_CountRowsIfTableExists($oConn, "B_MTPA3")) > 0)
+    Local $bBATCH = (_DB_CountRowsIfTableExists($oConn, "BUSINESS_CONFIG", "PARAM_ID LIKE '%BATCH%' OR PARAM_SECTION='BATCH'") > 0)
+    Local $bCROUT = ($bPS And ((_DB_CountRowsIfTableExists($oConn, "B_OPLI") + _DB_CountRowsIfTableExists($oConn, "B_TRAN")) > 0))
+
+    _ApplyDetectedModulesToUI($bPS, $bSRP, $bWOL, $bSR, $bINV, $bMRK, $bLR, $bPRM, $bBATCH, $bCROUT)
+
+    Local $sMode = ($bPS ? "PS" : "MP")
+    Local $sEvidence = "PS-only parameter OPERATEURS/PREASSIGN_OPERATORS_DURING_SCHEDULING=" & $nPSOperatorParam & _
+        ", PS optimizer params=" & $nPSOptimizerParam & _
+        ", non-MP routings=" & $nPSGamm & _
+        ", non-MP phases=" & $nPSPhas & _
+        ", B_BT=" & $nPSBT & _
+        ", LOAD_LEVELING params=" & $nMPLoadLeveling & _
+        ", SRP params=" & $nSRPParam & _
+        ", SRP data=" & $nSRPData
+
+    _Log("Module detection result: Mode=" & $sMode & ", SRP=" & ($bSRP ? "Yes" : "No") & ", WOL=" & ($bWOL ? "Yes" : "No") & ", SR=" & ($bSR ? "Yes" : "No") & ", INV=" & ($bINV ? "Yes" : "No") & ", LR=" & ($bLR ? "Yes" : "No"))
+    _LogVerbose("Module detection evidence: " & $sEvidence)
+
+    If Not $bSilent Then
+        MsgBox(262144+64, "Modules detected", "Detected mode: " & $sMode & @CRLF & _
+            "SRP: " & ($bSRP ? "Yes" : "No") & @CRLF & @CRLF & _
+            "Main evidence:" & @CRLF & _
+            "  PS-only parameter: " & $nPSOperatorParam & @CRLF & _
+            "  PS optimizer params: " & $nPSOptimizerParam & @CRLF & _
+            "  Load-leveling params: " & $nMPLoadLeveling & @CRLF & _
+            "  SRP params/data: " & ($nSRPParam + $nSRPData) & @CRLF & @CRLF & _
+            "The Modules tab and enabled tabs were updated.",0,$g_hMain)
+    EndIf
+
+    Return True
+EndFunc
+
+Func _ApplyDetectedModulesToUI($bPS, $bSRP, $bWOL, $bSR, $bINV, $bMRK, $bLR, $bPRM, $bBATCH, $bCROUT)
+    If IsDeclared("g_rbPS") Then GUICtrlSetState($g_rbPS, ($bPS ? $GUI_CHECKED : $GUI_UNCHECKED))
+    If IsDeclared("g_rbMP") Then GUICtrlSetState($g_rbMP, ($bPS ? $GUI_UNCHECKED : $GUI_CHECKED))
+
+    If IsDeclared("g_chkSRP")   Then GUICtrlSetState($g_chkSRP,   ($bSRP   ? $GUI_CHECKED : $GUI_UNCHECKED))
+    If IsDeclared("g_chkWOL")   Then GUICtrlSetState($g_chkWOL,   ($bWOL   ? $GUI_CHECKED : $GUI_UNCHECKED))
+    If IsDeclared("g_chkSR")    Then GUICtrlSetState($g_chkSR,    ($bSR    ? $GUI_CHECKED : $GUI_UNCHECKED))
+    If IsDeclared("g_chkINV")   Then GUICtrlSetState($g_chkINV,   ($bINV   ? $GUI_CHECKED : $GUI_UNCHECKED))
+    If IsDeclared("g_chkMRK")   Then GUICtrlSetState($g_chkMRK,   ($bMRK   ? $GUI_CHECKED : $GUI_UNCHECKED))
+    If IsDeclared("g_chkLR")    Then GUICtrlSetState($g_chkLR,    ($bLR    ? $GUI_CHECKED : $GUI_UNCHECKED))
+    If IsDeclared("g_chkPRM")   Then GUICtrlSetState($g_chkPRM,   ($bPRM   ? $GUI_CHECKED : $GUI_UNCHECKED))
+    If IsDeclared("g_chkBATCH") Then GUICtrlSetState($g_chkBATCH, ($bBATCH ? $GUI_CHECKED : $GUI_UNCHECKED))
+    If IsDeclared("g_chkCROUT") Then GUICtrlSetState($g_chkCROUT, ($bCROUT ? $GUI_CHECKED : $GUI_UNCHECKED))
+
+    _RefreshModuleFlags(True)
+    If IsDeclared("g_lblModHint") Then
+        GUICtrlSetData($g_lblModHint, "  OK  Modules detected from DB: " & ($bPS ? "PS" : "MP") & ($bSRP ? " + SRP" : ""))
+        GUICtrlSetColor($g_lblModHint, 0x007700)
+    EndIf
+EndFunc
+
+Func _DBScalarValue($oConn, $sSQL, $vDefault = 0)
+    Local $oRS = _DBQuery($oConn, $sSQL)
+    If Not IsObj($oRS) Then Return $vDefault
+    If $oRS.EOF Then
+        $oRS.Close()
+        Return $vDefault
+    EndIf
+
+    Local $vValue = $oRS.Fields(0).Value
+    $oRS.Close()
+    If String($vValue) = "" Or String($vValue) = "Null" Then Return $vDefault
+    Return $vValue
+EndFunc
+
+Func _DB_CountRowsIfTableExists($oConn, $sTable, $sWhere = "")
+    Local $sTableSafe = StringReplace($sTable, "'", "''")
+    Local $sCountSQL = "SELECT COUNT(1) FROM dbo." & _SQLIdent($sTable)
+    If StringStripWS($sWhere, 3) <> "" Then $sCountSQL &= " WHERE " & $sWhere
+
+    ; Use dynamic SQL for the COUNT branch.  Otherwise SQL Server can validate the
+    ; missing table name before the OBJECT_ID guard gets a chance to return 0.
+    $sCountSQL = StringReplace($sCountSQL, "'", "''")
+    Local $sSQL = "IF OBJECT_ID(N'dbo." & $sTableSafe & "', N'U') IS NULL SELECT CAST(0 AS INT) ELSE EXEC(N'" & $sCountSQL & "')"
+    Return Number(_DBScalarValue($oConn, $sSQL, 0))
 EndFunc
 
 Func _TestConnection()
@@ -2632,6 +2808,7 @@ Func _TestConnection()
     $oConn.Open($g_sConnStr)
     If $oConn.State = 1 Then ; adStateOpen = 1
         $bOK = True
+        _DetectModulesFromDB($oConn, True)
         $oConn.Close()
     Else
         $sErr = "Could not open the connection."
@@ -2814,6 +2991,10 @@ EndFunc
 
 Func _LoadFromDB_Click()
     _RunWithBusy("Load from DB", "_LoadFromDB")
+EndFunc
+
+Func _DetectModules_Click()
+    _RunWithBusy("Detect modules from DB", "_DetectModulesFromConnectedDB")
 EndFunc
 
 Func _ClearDatabase_Click()
@@ -6607,15 +6788,24 @@ Func _LoadFromDB()
 
     _Log("=== Load from DB started ===")
 
+    ; Always align the Modules tab with the selected database before reading data.
+    ; This prevents a previous saved selection (for example PS) from driving the
+    ; import of a different database that is actually MP+SRP.
+    _DetectModulesFromDB($oConn, True)
+
     Local $nTabs = 0
     $nTabs += _DB_LoadCalendars($oConn)
     $nTabs += _DB_LoadMachines($oConn)
-    $nTabs += _DB_LoadOperations($oConn)
-    $nTabs += _DB_LoadRoutings($oConn)
     $nTabs += _DB_LoadMaterials($oConn)
-    $nTabs += _DB_LoadBOM($oConn)
-    $nTabs += _DB_LoadWO($oConn)
-    If $g_bModWOL Then $nTabs += _DB_LoadWOLinks($oConn)
+
+    If $g_bModPS Then
+        $nTabs += _DB_LoadOperations($oConn)
+        $nTabs += _DB_LoadRoutings($oConn)
+        $nTabs += _DB_LoadWO($oConn)
+        If $g_bModWOL Then $nTabs += _DB_LoadWOLinks($oConn)
+    EndIf
+
+    If $g_bModSRP Or $g_bModMP Then $nTabs += _DB_LoadBOM($oConn)
 
     $oConn.Close()
     _Log("=== Load from DB complete - " & $nTabs & " tab(s) populated ===")
