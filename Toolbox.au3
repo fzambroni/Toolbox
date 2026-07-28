@@ -3,14 +3,14 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_Fileversion=1.1.6.5
+#AutoIt3Wrapper_Res_Fileversion=1.1.6.6
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_ProductVersion=1.1.6.5
-#AutoIt3Wrapper_Res_CompanyName=Fabricio Zambroni
-#AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Fabricio Zambroni
-#AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Updater.exe
-#AutoIt3Wrapper_Res_File_Add=E:\GitHub\Toolbox\Help.html
-#AutoIt3Wrapper_Run_After=E:\GitHub\Toolbox\FileUpdate.exe
+#AutoIt3Wrapper_Res_ProductVersion=1.1.6.6
+#AutoIt3Wrapper_Res_CompanyName=Ortems Toolbox
+#AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Ortems Toolbox
+#AutoIt3Wrapper_Res_File_Add=.\Updater.exe
+#AutoIt3Wrapper_Res_File_Add=.\Help.html
+#AutoIt3Wrapper_Run_After=.\FileUpdate.exe
 #EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
 
 #NoTrayIcon
@@ -42,7 +42,7 @@
 Opt("GUIOnEventMode", 1)
 Opt("MustDeclareVars", 0)
 
-Global $DevBy = "Developed by Fabricio Zambroni"
+Global $DevBy = "Ortems Toolbox"
 
 ; Log file is initialized early because the GitHub updater runs before the main UI is created.
 Global $g_sLogDir = @ScriptDir & "\log"
@@ -395,9 +395,16 @@ Func _CreateTabDatabase()
 
     GUICtrlCreateLabel("Database name:", $xL + 10, $y, 170, 20)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
-    Global $g_edtDatabase = GUICtrlCreateInput("ORTEMS_DEMO", $xV, $y, 220, 22)
+    Global $g_edtDatabase = GUICtrlCreateCombo("ORTEMS_DEMO", $xV, $y, 220, 240, BitOR($CBS_DROPDOWN, $WS_VSCROLL))
     _RegisterBusyControl($g_edtDatabase)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    GUICtrlSetTip($g_edtDatabase, "Type the database name manually or click 'Load DB Names' to select from the SQL Server list")
+
+    Global $g_btnLoadDBNames = GUICtrlCreateButton("Load DB Names", $xV + 230, $y - 1, 160, 24)
+    GUICtrlSetOnEvent($g_btnLoadDBNames, "_LoadDatabaseNames_Click")
+    GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
+    GUICtrlSetTip($g_btnLoadDBNames, "Connect to the SQL Server instance and populate the database drop-down")
+    _RegisterBusyControl($g_btnLoadDBNames)
     $y += 32
 
     GUICtrlCreateLabel("Authentication:", $xL + 10, $y, 170, 20)
@@ -448,11 +455,12 @@ Func _CreateTabDatabase()
     GUICtrlCreateGroup("How to use the Toolbox", $xL, $y, 720, 170)
     $y += 22
     Local $sInfo = "WORKFLOW:" & @CRLF & _
-        "  1. Configure the connection to the Ortems database (above) and click 'DB Connect'" & @CRLF & _
-        "  2. Go to the '2. Modules' tab and select the required Ortems modules for the demo" & @CRLF & _
-        "  3. Fill in the data in the tabs (Calendars, Machines, Operations, Routings, Items, etc.)" & @CRLF & _
-        "  4. Click 'Generate SQL' in the bottom toolbar to build the SQL script" & @CRLF & _
-        "  5. Click 'Run on DB' to execute the SQL and insert data into the Ortems database" & @CRLF & _
+        "  1. Configure the SQL Server connection. Optionally click 'Load DB Names' to populate the database drop-down" & @CRLF & _
+        "  2. Select the target Ortems database and click 'DB Connect'" & @CRLF & _
+        "  3. Go to the '2. Modules' tab and select the required Ortems modules for the demo" & @CRLF & _
+        "  4. Fill in the data in the tabs (Calendars, Machines, Operations, Routings, Items, etc.)" & @CRLF & _
+        "  5. Click 'Generate SQL' in the bottom toolbar to build the SQL script" & @CRLF & _
+        "  6. Click 'Run on DB' to execute the SQL and insert data into the Ortems database" & @CRLF & _
         "  Tip: Settings (server, modules) are automatically saved to settings.ini"
     GUICtrlCreateEdit($sInfo, $xL + 10, $y, 700, 130, $ES_READONLY + $WS_VSCROLL)
     GUICtrlSetFont(-1, 9, 400, 0, "Segoe UI")
@@ -2477,6 +2485,118 @@ EndFunc
 ;=============================================================================
 ; DATABASE CONNECTION
 ;=============================================================================
+Func _BuildConnectionString($sDatabase = "")
+    Local $sServer = StringStripWS(GUICtrlRead($g_edtServer), 3)
+    Local $sAuth   = GUICtrlRead($g_cmbAuth)
+    Local $sConn   = "Driver={SQL Server};Server=" & $sServer & ";"
+
+    $sDatabase = StringStripWS($sDatabase, 3)
+    If $sDatabase <> "" Then $sConn &= "Database=" & $sDatabase & ";"
+
+    If $sAuth = "Windows Authentication" Then
+        $sConn &= "Trusted_Connection=yes;"
+    Else
+        $sConn &= "UID=" & GUICtrlRead($g_edtUser) & ";PWD=" & GUICtrlRead($g_edtPass) & ";"
+    EndIf
+
+    Return $sConn
+EndFunc
+
+Func _LoadDatabaseNames()
+    Local $sServer = StringStripWS(GUICtrlRead($g_edtServer), 3)
+    If $sServer = "" Then
+        MsgBox(262144+48, "Database list", "Server / Instance is required before loading database names.",0,$g_hMain)
+        Return
+    EndIf
+
+    If GUICtrlRead($g_cmbAuth) = "SQL Server Authentication" And StringStripWS(GUICtrlRead($g_edtUser), 3) = "" Then
+        MsgBox(262144+48, "Database list", "User is required when SQL Server Authentication is selected.",0,$g_hMain)
+        Return
+    EndIf
+
+    Local $sCurrentDB = StringStripWS(GUICtrlRead($g_edtDatabase), 3)
+    Local $sConnStr = _BuildConnectionString("master")
+    GUICtrlSetData($g_edtConnStr, _MaskConnectionString($sConnStr))
+
+    Local $oConn = ObjCreate("ADODB.Connection")
+    If Not IsObj($oConn) Then
+        MsgBox(262144+16, "Database list", "Could not create ADODB.Connection." & @CRLF & "Check that the SQL Server ODBC / OLE DB provider is installed.",0,$g_hMain)
+        Return
+    EndIf
+
+    $oConn.ConnectionString = $sConnStr
+    $oConn.ConnectionTimeout = 5
+
+    _Log("Loading available database names from server " & $sServer)
+    _LogVerbose("Database discovery connection string: " & _MaskConnectionString($sConnStr))
+
+    $g_sLastComError = ""
+    $oConn.Open($sConnStr)
+    If $g_sLastComError <> "" Or $oConn.State <> 1 Then
+        MsgBox(262144+16, "Database list", "Could not connect to the SQL Server instance." & @CRLF & @CRLF & _
+            $g_sLastComError & @CRLF & @CRLF & "Connection string used:" & @CRLF & _MaskConnectionString($sConnStr),0,$g_hMain)
+        Return
+    EndIf
+
+    Local $sSQL = "SELECT [name] FROM sys.databases WHERE [state] = 0 AND HAS_DBACCESS([name]) = 1 AND [name] NOT IN ('master','model','msdb','tempdb') ORDER BY [name]"
+    _LogVerboseSQL("Load database names", $sSQL)
+
+    $g_sLastComError = ""
+    Local $oRS = $oConn.Execute($sSQL)
+    If $g_sLastComError <> "" Or Not IsObj($oRS) Then
+        $oConn.Close()
+        MsgBox(262144+16, "Database list", "Could not read database names from sys.databases." & @CRLF & @CRLF & $g_sLastComError,0,$g_hMain)
+        Return
+    EndIf
+
+    Local $aNames[0]
+    While Not $oRS.EOF
+        Local $sName = String($oRS.Fields(0).Value)
+        If StringStripWS($sName, 3) <> "" Then
+            Local $n = UBound($aNames)
+            ReDim $aNames[$n + 1]
+            $aNames[$n] = $sName
+        EndIf
+        $oRS.MoveNext()
+    WEnd
+    $oRS.Close()
+    $oConn.Close()
+
+    Local $hCombo = GUICtrlGetHandle($g_edtDatabase)
+    _GUICtrlComboBox_ResetContent($hCombo)
+
+    Local $bCurrentFound = False
+    For $i = 0 To UBound($aNames) - 1
+        _GUICtrlComboBox_AddString($hCombo, $aNames[$i])
+        If StringLower($aNames[$i]) = StringLower($sCurrentDB) Then $bCurrentFound = True
+    Next
+
+    If UBound($aNames) = 0 Then
+        If $sCurrentDB <> "" Then
+            _GUICtrlComboBox_AddString($hCombo, $sCurrentDB)
+            _GUICtrlComboBox_SelectString($hCombo, $sCurrentDB)
+        EndIf
+        MsgBox(262144+48, "Database list", "No online user databases were returned for this login." & @CRLF & @CRLF & _
+            "The login may not have permission to view databases, or the server may only contain system databases.",0,$g_hMain)
+        Return
+    EndIf
+
+    If $sCurrentDB <> "" Then
+        If $bCurrentFound Then
+            _GUICtrlComboBox_SelectString($hCombo, $sCurrentDB)
+        Else
+            _GUICtrlComboBox_AddString($hCombo, $sCurrentDB)
+            _GUICtrlComboBox_SelectString($hCombo, $sCurrentDB)
+        EndIf
+    Else
+        _GUICtrlComboBox_SetCurSel($hCombo, 0)
+    EndIf
+
+    _Log("Database list loaded successfully (" & UBound($aNames) & " database(s) found).")
+    MsgBox(262144+64, "Database list", UBound($aNames) & " database(s) loaded." & @CRLF & @CRLF & _
+        "Open the Database name drop-down and select the target Ortems database.",0,$g_hMain)
+EndFunc
+
 Func _TestConnection()
     $g_sServer   = GUICtrlRead($g_edtServer)
     $g_sDatabase = GUICtrlRead($g_edtDatabase)
@@ -2487,13 +2607,9 @@ Func _TestConnection()
         Return
     EndIf
 
-    If $sAuth = "Windows Authentication" Then
-        $g_sConnStr = "Driver={SQL Server};Server=" & $g_sServer & ";Database=" & $g_sDatabase & ";Trusted_Connection=yes;"
-    Else
-        $g_sConnStr = "Driver={SQL Server};Server=" & $g_sServer & ";Database=" & $g_sDatabase & ";UID=" & GUICtrlRead($g_edtUser) & ";PWD=" & GUICtrlRead($g_edtPass) & ";"
-    EndIf
+    $g_sConnStr = _BuildConnectionString($g_sDatabase)
 
-    GUICtrlSetData($g_edtConnStr, $g_sConnStr)
+    GUICtrlSetData($g_edtConnStr, _MaskConnectionString($g_sConnStr))
     _Log("Connection test started for database " & $g_sDatabase & " on server " & $g_sServer)
     _LogVerbose("Connection string: " & _MaskConnectionString($g_sConnStr))
 
@@ -2532,7 +2648,7 @@ Func _TestConnection()
         $g_bConnected = False
         GUICtrlSetData($g_lblStatus, "Connection error")
         GUICtrlSetColor($g_lblStatus, 0xCC0000)
-        MsgBox(262144+16, "Connection error", "Could not connect to the database." & @CRLF & @CRLF & $sErr & @CRLF & @CRLF & "Connection string used:" & @CRLF & $g_sConnStr,0,$g_hMain)
+        MsgBox(262144+16, "Connection error", "Could not connect to the database." & @CRLF & @CRLF & $sErr & @CRLF & @CRLF & "Connection string used:" & @CRLF & _MaskConnectionString($g_sConnStr),0,$g_hMain)
     EndIf
 EndFunc
 
@@ -2678,6 +2794,10 @@ EndFunc
 
 Func _TestConnection_Click()
     _RunWithBusy("Test DB connection", "_TestConnection")
+EndFunc
+
+Func _LoadDatabaseNames_Click()
+    _RunWithBusy("Load database names", "_LoadDatabaseNames")
 EndFunc
 
 Func _InspectTable_Click()
@@ -7266,7 +7386,12 @@ Func _LoadSettings()
     Local $sUser   = IniRead($g_sIniFile, "Connection", "User",     "")
 
     If $sServer <> "" Then GUICtrlSetData($g_edtServer,   $sServer)
-    If $sDB     <> "" Then GUICtrlSetData($g_edtDatabase, $sDB)
+    If $sDB     <> "" Then
+        Local $hDBCombo = GUICtrlGetHandle($g_edtDatabase)
+        _GUICtrlComboBox_ResetContent($hDBCombo)
+        _GUICtrlComboBox_AddString($hDBCombo, $sDB)
+        _GUICtrlComboBox_SelectString($hDBCombo, $sDB)
+    EndIf
     GUICtrlSetData($g_cmbAuth, $sAuth)
     _OnAuthChange()   ; enable/disable user+pass fields based on auth type
     If $sUser <> "" Then GUICtrlSetData($g_edtUser, $sUser)
