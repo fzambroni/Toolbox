@@ -1,9 +1,9 @@
-﻿#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
 #AutoIt3Wrapper_Icon=Toolbox.ico
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_Fileversion=1.1.6.8
+#AutoIt3Wrapper_Res_Fileversion=1.1.6.7
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
 #AutoIt3Wrapper_Res_ProductVersion=1.1.6.7
 #AutoIt3Wrapper_Res_CompanyName=Ortems Toolbox
@@ -6393,57 +6393,22 @@ Func _XLImportWorksheetToLV($hLV, $oSheet)
     Local $nCols = _GUICtrlListView_GetColumnCount($hLV)
     Local $nDataCols = $nCols - 1
     Local $nUsedRows = $oSheet.UsedRange.Rows.Count
-    Local $nImported = 0, $hTimer = TimerInit()
-    If $nDataCols < 1 Then Return 0
-
-    ; Bound memory use. Raw COM SAFEARRAYs have column-first dimensions in AutoIt
-    ; (see the native transpose in Excel.au3's _Excel_RangeRead).
-    Local Const $nChunkRows = 1000
-    _GUICtrlListView_BeginUpdate($hLV)
+    Local $nImported = 0
     _GUICtrlListView_DeleteAllItems($hLV)
-    For $iStart = 4 To $nUsedRows Step $nChunkRows
-        Local $iEnd = $iStart + $nChunkRows - 1
-        If $iEnd > $nUsedRows Then $iEnd = $nUsedRows
-        Local $nBlockRows = $iEnd - $iStart + 1
-        Local $oRange = $oSheet.Range($oSheet.Cells($iStart, 1), $oSheet.Cells($iEnd, $nDataCols))
-        Local $aValues = 0, $bBulk = False
-        $g_sLastComError = ""
-        Local $vFormat = $oRange.NumberFormat
-        ; Only uniformly text-formatted blocks can bypass displayed-text reads.
-        ; Dates, numeric formatting, mixed formats and errors keep the old .Text path.
-        If IsString($vFormat) And $vFormat == "@" And $g_sLastComError = "" Then
-            $aValues = $oRange.Value2
-            If $g_sLastComError = "" And IsArray($aValues) Then
-                If UBound($aValues, 0) = 2 Then
-                    $bBulk = (UBound($aValues, 1) = $nDataCols And UBound($aValues, 2) = $nBlockRows)
-                EndIf
-            EndIf
-        EndIf
-        For $r = $iStart To $iEnd
-            Local $sItem = "", $bEmpty = True
-            For $c = 1 To $nDataCols
-                Local $sCell = "", $bReadText = True
-                If $bBulk Then
-                    ; Non-string variants (including Excel error codes) require .Text.
-                    If IsString($aValues[$c - 1][$r - $iStart]) Then
-                        $sCell = $aValues[$c - 1][$r - $iStart]
-                        $bReadText = False
-                    EndIf
-                EndIf
-                If $bReadText Then $sCell = $oSheet.Cells($r, $c).Text
-                If StringStripWS($sCell, 3) <> "" Then $bEmpty = False
-                If $c > 1 Then $sItem &= "|"
-                $sItem &= StringReplace($sCell, "|", "/")
-            Next
-            If $bEmpty Then ContinueLoop
-            ; Keep AutoIt-owned ListView items and the existing append helper.
-            ; It already assigns consecutive line numbers, so no renumber pass is needed.
-            _LV_AppendDataRow($hLV, $sItem)
-            $nImported += 1
+
+    For $r = 4 To $nUsedRows
+        If _XLRowIsEmpty($oSheet, $r, $nDataCols) Then ContinueLoop
+        Local $sItem = ""
+        For $c = 1 To $nDataCols
+            If $c > 1 Then $sItem &= "|"
+            Local $sCell = $oSheet.Cells($r, $c).Text
+            $sItem &= StringReplace($sCell, "|", "/")
         Next
+        _LV_AppendDataRow($hLV, $sItem)
+        $nImported += 1
     Next
-    _GUICtrlListView_EndUpdate($hLV)
-    _LogVerbose("Workbook sheet imported: " & $oSheet.Name & " = " & $nImported & " row(s), " & Round(TimerDiff($hTimer) / 1000, 2) & " s")
+    _LV_Renumber($hLV)
+    _LogVerbose("Workbook sheet imported: " & $oSheet.Name & " = " & $nImported & " row(s)")
     Return $nImported
 EndFunc
 
