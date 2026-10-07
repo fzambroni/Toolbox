@@ -3,9 +3,9 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_Fileversion=1.1.6.9
+#AutoIt3Wrapper_Res_Fileversion=1.1.7.0
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_ProductVersion=1.1.6.9
+#AutoIt3Wrapper_Res_ProductVersion=1.1.7.0
 #AutoIt3Wrapper_Res_CompanyName=Ortems Toolbox
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Ortems Toolbox
 #AutoIt3Wrapper_Res_File_Add=.\Updater.exe
@@ -6472,6 +6472,161 @@ Func _XLReadModuleMetadata($oBook, ByRef $bPS, ByRef $bSRP, ByRef $bWOL, ByRef $
     Return True
 EndFunc
 
+Func _XLReadReadMeAllText($oBook)
+    Local $oSheet = _XLSheetByName($oBook, "README")
+    If Not IsObj($oSheet) Then Return ""
+
+    Local $sText = ""
+    Local $nRows = 0, $nCols = 0
+    $g_sLastComError = ""
+    $nRows = Number($oSheet.UsedRange.Rows.Count)
+    $nCols = Number($oSheet.UsedRange.Columns.Count)
+    If $g_sLastComError <> "" Or $nRows < 1 Then Return ""
+    If $nCols < 1 Then Return ""
+    If $nCols > 6 Then $nCols = 6 ; README context is normally in the first columns.
+
+    For $r = 1 To $nRows
+        For $c = 1 To $nCols
+            Local $sCell = StringStripWS(String($oSheet.Cells($r, $c).Text), 3)
+            If $sCell <> "" Then $sText &= " " & $sCell
+        Next
+    Next
+    Return StringUpper($sText)
+EndFunc
+
+Func _XLWorksheetDataRowCount($oSheet, $nCols)
+    If Not IsObj($oSheet) Then Return 0
+    If $nCols < 1 Then Return 0
+
+    Local $nUsedRows = 0
+    $g_sLastComError = ""
+    $nUsedRows = Number($oSheet.UsedRange.Rows.Count)
+    If $g_sLastComError <> "" Or $nUsedRows < 4 Then Return 0
+
+    ; UsedRange can occasionally be larger than the actual imported data because of
+    ; formatting.  Walk upward from the bottom and stop at the first row that has
+    ; real text in the expected Toolbox columns.
+    For $r = $nUsedRows To 4 Step -1
+        For $c = 1 To $nCols
+            If StringStripWS(String($oSheet.Cells($r, $c).Text), 3) <> "" Then Return ($r - 3)
+        Next
+    Next
+    Return 0
+EndFunc
+
+Func _XLWorksheetColumnHasText($oSheet, $iCol, $sExpected)
+    If Not IsObj($oSheet) Then Return False
+    If $iCol < 1 Then Return False
+
+    Local $sFind = StringUpper(StringStripWS($sExpected, 3))
+    Local $nUsedRows = 0
+    $g_sLastComError = ""
+    $nUsedRows = Number($oSheet.UsedRange.Rows.Count)
+    If $g_sLastComError <> "" Or $nUsedRows < 4 Then Return False
+
+    For $r = 4 To $nUsedRows
+        Local $sVal = StringUpper(StringStripWS(String($oSheet.Cells($r, $iCol).Text), 3))
+        If $sVal = $sFind Then Return True
+    Next
+    Return False
+EndFunc
+
+Func _XLDetectModulesFromWorkbookSheets($oBook, ByRef $bPS, ByRef $bSRP, ByRef $bWOL, ByRef $bSR, ByRef $bINV, ByRef $bMRK, ByRef $bLR, ByRef $bPRM, ByRef $bBATCH, ByRef $bCROUT, ByRef $sEvidence)
+    ; Detect modules directly from the workbook being imported, before UI state or
+    ; DB-detected state can influence the result. This is intentionally independent
+    ; of the current tab enable/disable state.
+    Local $aMap = _DatasetMap()
+    Local $nCal = 0, $nMach = 0, $nOps = 0, $nRout = 0, $nMat = 0, $nBOM = 0
+    Local $nWO = 0, $nWOL = 0, $nSR = 0, $nCap = 0, $nStk = 0
+    Local $oMachSheet = 0
+
+    For $i = 0 To UBound($aMap) - 1
+        Local $oSheet = _XLSheetByName($oBook, $aMap[$i][1])
+        If Not IsObj($oSheet) Then ContinueLoop
+
+        Local $nCols = _GUICtrlListView_GetColumnCount($aMap[$i][0]) - 1
+        Local $nRows = _XLWorksheetDataRowCount($oSheet, $nCols)
+
+        Switch $aMap[$i][1]
+            Case "Calendars"
+                $nCal = $nRows
+            Case "Machines"
+                $nMach = $nRows
+                $oMachSheet = $oSheet
+            Case "Operations"
+                $nOps = $nRows
+            Case "Routings"
+                $nRout = $nRows
+            Case "Items"
+                $nMat = $nRows
+            Case "BOM"
+                $nBOM = $nRows
+            Case "WorkOrders"
+                $nWO = $nRows
+            Case "WOLinks"
+                $nWOL = $nRows
+            Case "SecondaryResources"
+                $nSR = $nRows
+            Case "Capacity"
+                $nCap = $nRows
+            Case "InventoryMovements"
+                $nStk = $nRows
+        EndSwitch
+    Next
+
+    Local $sReadMe = _XLReadReadMeAllText($oBook)
+    Local $bReadMePS = (StringInStr($sReadMe, "PRODUCTION SCHEDULER") > 0 Or _
+                        StringInStr($sReadMe, "PRODUCTION SCHEDULING") > 0 Or _
+                        StringRegExp($sReadMe, "(^|[^A-Z0-9])PS([^A-Z0-9]|$)"))
+    Local $bReadMeMP = (StringInStr($sReadMe, "MASTER PLANNING") > 0 Or _
+                        StringInStr($sReadMe, "BUCKET PLANNING") > 0 Or _
+                        StringRegExp($sReadMe, "(^|[^A-Z0-9])MP([^A-Z0-9]|$)"))
+    Local $bReadMeSRP = (StringInStr($sReadMe, "SYNCHRONIZED REQUIREMENTS PLANNER") > 0 Or _
+                         StringRegExp($sReadMe, "(^|[^A-Z0-9])SRP([^A-Z0-9]|$)"))
+
+    Local $nAny = $nCal + $nMach + $nOps + $nRout + $nMat + $nBOM + $nWO + $nWOL + $nSR + $nCap + $nStk
+    Local $bStrongPSData = (($nOps + $nRout + $nWO + $nWOL + $nSR) > 0)
+    Local $bHasWorkbookEvidence = ($nAny > 0 Or $bReadMePS Or $bReadMeMP Or $bReadMeSRP)
+    If Not $bHasWorkbookEvidence Then Return False
+
+    If $bStrongPSData Or $bReadMePS Then
+        $bPS = True
+    ElseIf $bReadMeMP Then
+        $bPS = False
+    Else
+        ; Workbook has data but no reliable PS-specific evidence. Treat it as MP.
+        ; Items/BOM/Capacity alone are not enough to prove a PS environment.
+        $bPS = False
+    EndIf
+
+    $bSRP   = ($nBOM > 0 Or $bReadMeSRP)
+    $bWOL   = ($bPS And $nWOL > 0)
+    $bSR    = ($bPS And $nSR > 0)
+    $bINV   = ($nStk > 0)
+    $bMRK   = False
+    $bLR    = ((Not $bPS) Or $nCap > 0)
+    $bPRM   = False
+    $bBATCH = _XLWorksheetColumnHasText($oMachSheet, 10, "BA")
+    $bCROUT = False
+
+    $sEvidence = "Calendars=" & $nCal & _
+        ", Machines=" & $nMach & _
+        ", Operations=" & $nOps & _
+        ", Routings=" & $nRout & _
+        ", Items=" & $nMat & _
+        ", BOM=" & $nBOM & _
+        ", WorkOrders=" & $nWO & _
+        ", WOLinks=" & $nWOL & _
+        ", SecondaryResources=" & $nSR & _
+        ", Capacity=" & $nCap & _
+        ", InventoryMovements=" & $nStk & _
+        ", README_PS=" & ($bReadMePS ? "Yes" : "No") & _
+        ", README_MP=" & ($bReadMeMP ? "Yes" : "No") & _
+        ", README_SRP=" & ($bReadMeSRP ? "Yes" : "No")
+
+    Return True
+EndFunc
+
 Func _LV_CountSafe($hLV)
     If $hLV = 0 Then Return 0
     Return _GUICtrlListView_GetItemCount($hLV)
@@ -6669,7 +6824,14 @@ Func _ImportExcel()
     Local $bMetaPS = True, $bMetaSRP = False, $bMetaWOL = False, $bMetaSR = False, $bMetaINV = False
     Local $bMetaMRK = False, $bMetaLR = False, $bMetaPRM = False, $bMetaBATCH = False, $bMetaCROUT = False
     $bMetaModules = _XLReadModuleMetadata($oBook, $bMetaPS, $bMetaSRP, $bMetaWOL, $bMetaSR, $bMetaINV, $bMetaMRK, $bMetaLR, $bMetaPRM, $bMetaBATCH, $bMetaCROUT)
-    If $bMetaModules Then _LogVerbose("Workbook contains module metadata. Import will apply Modules tab from README.")
+    If $bMetaModules Then _LogVerbose("Workbook contains standard Toolbox module metadata in README.")
+
+    Local $bSheetModules = False
+    Local $bSheetPS = True, $bSheetSRP = False, $bSheetWOL = False, $bSheetSR = False, $bSheetINV = False
+    Local $bSheetMRK = False, $bSheetLR = False, $bSheetPRM = False, $bSheetBATCH = False, $bSheetCROUT = False
+    Local $sSheetEvidence = ""
+    $bSheetModules = _XLDetectModulesFromWorkbookSheets($oBook, $bSheetPS, $bSheetSRP, $bSheetWOL, $bSheetSR, $bSheetINV, $bSheetMRK, $bSheetLR, $bSheetPRM, $bSheetBATCH, $bSheetCROUT, $sSheetEvidence)
+    If $bSheetModules Then _LogVerbose("Workbook module detection from sheet contents: " & $sSheetEvidence)
 
     Local $aMap = _DatasetMap()
     Local $sErrors = ""
@@ -6709,9 +6871,18 @@ Func _ImportExcel()
     $oBook.Close(False)
     $oExcel.Quit()
 
-    If $bMetaModules Then
+    Local $sModuleSource = "workbook data."
+    If $bSheetModules Then
+        ; Sheet contents take precedence over current UI/database state and over stale or
+        ; non-standard README text. This fixes PS workbooks being left as MP when the
+        ; imported sheets clearly contain Operations/Routings/WorkOrders data.
+        _ApplyDetectedModulesToUI($bSheetPS, $bSheetSRP, $bSheetWOL, $bSheetSR, $bSheetINV, $bSheetMRK, $bSheetLR, $bSheetPRM, $bSheetBATCH, $bSheetCROUT, "Workbook sheets")
+        _Log("Workbook module settings applied from workbook sheets: Mode=" & ($bSheetPS ? "PS" : "MP") & ", SRP=" & ($bSheetSRP ? "Yes" : "No") & ", evidence: " & $sSheetEvidence)
+        $sModuleSource = "workbook sheet contents."
+    ElseIf $bMetaModules Then
         _ApplyDetectedModulesToUI($bMetaPS, $bMetaSRP, $bMetaWOL, $bMetaSR, $bMetaINV, $bMetaMRK, $bMetaLR, $bMetaPRM, $bMetaBATCH, $bMetaCROUT, "Workbook metadata")
         _Log("Workbook module settings applied from README metadata: Mode=" & ($bMetaPS ? "PS" : "MP") & ", SRP=" & ($bMetaSRP ? "Yes" : "No"))
+        $sModuleSource = "workbook metadata."
     Else
         _DetectModulesFromImportedWorkbookData()
     EndIf
@@ -6720,7 +6891,7 @@ Func _ImportExcel()
     _Log("Workbook import finished: " & $nTotalRows & " data rows <- " & $sFile)
 
     Local $sMsg = "Imported " & $nTotalRows & " data row(s) from:" & @CRLF & $sFile & @CRLF & @CRLF & _
-        "Modules tab was updated from " & ($bMetaModules ? "workbook metadata." : "workbook data.")
+        "Modules tab was updated from " & $sModuleSource
     If $nIssues > 0 Then
         $sMsg &= @CRLF & @CRLF & "Integrity check found " & $nIssues & " issue(s). Review the execution log or click Integrity Check to fix simple references."
         MsgBox(262144+48, "Import workbook", $sMsg,0,$g_hMain)
