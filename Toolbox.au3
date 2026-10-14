@@ -3,9 +3,9 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_Fileversion=1.1.7.0
+#AutoIt3Wrapper_Res_Fileversion=1.1.7.1
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_ProductVersion=1.1.7.0
+#AutoIt3Wrapper_Res_ProductVersion=1.1.7.1
 #AutoIt3Wrapper_Res_CompanyName=Ortems Toolbox
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Ortems Toolbox
 #AutoIt3Wrapper_Res_File_Add=.\Updater.exe
@@ -383,7 +383,7 @@ EndFunc
 Func _CreateTabDatabase()
     Local $y = 85, $xL = 20, $xV = 200
 
-    GUICtrlCreateGroup("SQL Server Connection", $xL, $y, 620, 225)
+    GUICtrlCreateGroup("SQL Server Connection", $xL, $y, 620, 245)
     $y += 28
 
     GUICtrlCreateLabel("Server / Instance:", $xL + 10, $y, 170, 20)
@@ -444,14 +444,14 @@ Func _CreateTabDatabase()
     _RegisterBusyControl($g_btnInspect)
 
     ; Connection string display
-    $y = 330
+    $y = 350
     GUICtrlCreateGroup("Active connection string", $xL, $y, 620, 80)
     Global $g_edtConnStr = GUICtrlCreateEdit("", $xL + 10, $y + 22, 590, 48, $ES_READONLY + $WS_VSCROLL)
     GUICtrlSetFont(-1, 8, 400, 0, "Courier New")
     GUICtrlSetBkColor($g_edtConnStr, 0xF5F5F5)
 
     ; Instructions
-    $y = 430
+    $y = 450
     GUICtrlCreateGroup("How to use the Toolbox", $xL, $y, 720, 170)
     $y += 22
     Local $sInfo = "WORKFLOW:" & @CRLF & _
@@ -6804,10 +6804,61 @@ Func _ExportExcel()
     MsgBox(262144+64, "Export workbook", "Exported " & $nTotalRows & " data row(s) to:" & @CRLF & $sFile & @CRLF & @CRLF & "Integrity at export: " & $sStatus,0,$g_hMain)
 EndFunc
 
+Func _IsExistingDirectory($sDir)
+    $sDir = StringStripWS($sDir, 3)
+    If $sDir = "" Then Return False
+
+    Local $sAttrib = FileGetAttrib($sDir)
+    If @error Then Return False
+
+    Return (StringInStr($sAttrib, "D") > 0)
+EndFunc
+
+Func _GetDirectoryFromPath($sPath)
+    Local $sValue = StringStripWS($sPath, 3)
+    If $sValue = "" Then Return ""
+
+    If _IsExistingDirectory($sValue) Then Return $sValue
+
+    Local $iSlash = StringInStr($sValue, "\", 0, -1)
+    Local $iForwardSlash = StringInStr($sValue, "/", 0, -1)
+    If $iForwardSlash > $iSlash Then $iSlash = $iForwardSlash
+    If $iSlash <= 0 Then Return ""
+
+    ; Keep root paths such as C:\ intact.
+    If $iSlash = 3 And StringMid($sValue, 2, 1) = ":" Then Return StringLeft($sValue, 3)
+
+    Return StringLeft($sValue, $iSlash - 1)
+EndFunc
+
+Func _GetWorkbookImportInitialDir()
+    Local $sLastDir = IniRead($g_sIniFile, "Paths", "LastImportWorkbookDir", "")
+    If _IsExistingDirectory($sLastDir) Then Return $sLastDir
+
+    ; First run or invalid saved folder: open next to the application.
+    If _IsExistingDirectory(@ScriptDir) Then Return @ScriptDir
+
+    Return @WorkingDir
+EndFunc
+
+Func _SaveWorkbookImportDir($sFile)
+    Local $sDir = _GetDirectoryFromPath($sFile)
+    If Not _IsExistingDirectory($sDir) Then Return
+
+    IniWrite($g_sIniFile, "Paths", "LastImportWorkbookDir", $sDir)
+    _LogVerbose("Last workbook import folder saved: " & $sDir)
+EndFunc
+
 Func _ImportExcel()
-    Local $sFile = FileOpenDialog("Import Ortems Toolbox workbook", @WorkingDir, "Excel Workbook (*.xlsx;*.xlsm;*.xls)|All (*.*)", 1)
-    If Not @error And $sFile <> "" Then _LogVerbose("Workbook import requested: " & $sFile)
-    If @error Or $sFile = "" Then Return
+    Local $sInitialDir = _GetWorkbookImportInitialDir()
+    Local $sFile = FileOpenDialog("Import Ortems Toolbox workbook", $sInitialDir, "Excel Workbook (*.xlsx;*.xlsm;*.xls)|All (*.*)", 1)
+    Local $iOpenError = @error
+
+    If $iOpenError = 0 And $sFile <> "" Then
+        _SaveWorkbookImportDir($sFile)
+        _LogVerbose("Workbook import requested: " & $sFile)
+    EndIf
+    If $iOpenError Or $sFile = "" Then Return
 
     Local $oExcel = _ExcelCreateApp()
     If Not IsObj($oExcel) Then Return
