@@ -3,9 +3,9 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_Fileversion=1.1.7.1
+#AutoIt3Wrapper_Res_Fileversion=1.1.7.2
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_ProductVersion=1.1.7.1
+#AutoIt3Wrapper_Res_ProductVersion=1.1.7.2
 #AutoIt3Wrapper_Res_CompanyName=Ortems Toolbox
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Ortems Toolbox
 #AutoIt3Wrapper_Res_File_Add=.\Updater.exe
@@ -130,6 +130,7 @@ Global $g_hLV_Mat, $g_hLV_BOM, $g_hLV_WO, $g_hLV_WOL
 Global $g_hLV_SR, $g_hLV_Cap, $g_hLV_Stk
 Global $g_hLog
 Global $g_sIntegrityReport = ""
+Global $g_oIntegrityItemTypeCache = 0 ; only populated during integrity checks
 ; Log globals are initialized before the updater runs.
 Global $g_bFullCleanImport = False
 Global $g_iBusyDepth = 0
@@ -3724,6 +3725,10 @@ EndFunc
 Func _LookupItemType($sItemID)
     Local $sNeedle = StringLower(StringStripWS($sItemID, 3))
     If $sNeedle = "" Then Return ""
+    If IsObj($g_oIntegrityItemTypeCache) Then
+        If $g_oIntegrityItemTypeCache.Exists($sNeedle) Then Return $g_oIntegrityItemTypeCache.Item($sNeedle)
+        Return ""
+    EndIf
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Mat)
     For $i = 0 To $nRows - 1
         Local $sRowItem = StringLower(StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 0), 3))
@@ -5143,10 +5148,22 @@ Func _ValidateFKBeforeImport()
     $g_sIntegrityReport = ""
     _Log("=== Integrity Check started (cross-tab reference validation) ===")
 
+    ; Cache first-matching item types for this validation run only.
+    ; Without this, each BOM/WO/inventory check scanned the entire Items tab.
+    $g_oIntegrityItemTypeCache = ObjCreate("Scripting.Dictionary")
+    $g_oIntegrityItemTypeCache.CompareMode = 1
+    Local $nItemRows = _GUICtrlListView_GetItemCount($g_hLV_Mat)
+    For $i = 0 To $nItemRows - 1
+        Local $sItemKey = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 0), 3)
+        If $sItemKey <> "" And Not $g_oIntegrityItemTypeCache.Exists($sItemKey) Then
+            $g_oIntegrityItemTypeCache.Add($sItemKey, StringStripWS(_GUICtrlListView_GetItemText($g_hLV_Mat, $i, 2), 3))
+        EndIf
+    Next
+
     ; Reference sets
     Local $setCalIDs         = _LVColSet($g_hLV_Cal, 0)
     Local $setCapCalIDs      = _LVColSet($g_hLV_Cap, 0)
-    Local $setAnyCalIDs      = $setCalIDs & StringTrimLeft($setCapCalIDs, 1)
+    Local $setAnyCalIDs      = _SetUnion($setCalIDs, $setCapCalIDs)
     Local $setCTIDs          = _LVColSet($g_hLV_Mach, 2)
     Local $setMachIDs        = _LVColSet($g_hLV_Mach, 7)
     Local $setCTMach         = _LVCompositeSet($g_hLV_Mach, "2,7")
@@ -5216,27 +5233,46 @@ Func _ValidateFKBeforeImport()
     Else
         _Log("=== Integrity Check finished with " & $nIssues & " issue(s) ===")
     EndIf
+    $g_oIntegrityItemTypeCache = 0 ; never keep stale types after editing
     Return $nIssues
 EndFunc
 
 Func _LVColSet($hLV, $iCol)
-    Local $sSet = ";"
+    Local $oSet = ObjCreate("Scripting.Dictionary")
+    $oSet.CompareMode = 1 ; vbTextCompare, matches StringInStr default behavior
     Local $nRows = _GUICtrlListView_GetItemCount($hLV)
     For $i = 0 To $nRows - 1
         Local $sVal = StringStripWS(_GUICtrlListView_GetItemText($hLV, $i, $iCol), 3)
-        If $sVal <> "" And Not StringInStr($sSet, ";" & $sVal & ";") Then $sSet &= $sVal & ";"
+        If $sVal <> "" And Not $oSet.Exists($sVal) Then $oSet.Add($sVal, True)
     Next
-    Return $sSet
+    Return $oSet
 EndFunc
 
 Func _LVCompositeSet($hLV, $sCols)
-    Local $sSet = ";"
+    Local $oSet = ObjCreate("Scripting.Dictionary")
+    $oSet.CompareMode = 1
     Local $nRows = _GUICtrlListView_GetItemCount($hLV)
     For $i = 0 To $nRows - 1
         Local $sKey = _LVComposeKey($hLV, $i, $sCols)
-        If $sKey <> "" And Not StringInStr($sSet, ";" & $sKey & ";") Then $sSet &= $sKey & ";"
+        If $sKey <> "" And Not $oSet.Exists($sKey) Then $oSet.Add($sKey, True)
     Next
-    Return $sSet
+    Return $oSet
+EndFunc
+
+Func _SetContains($oSet, $sValue)
+    Return (IsObj($oSet) And $oSet.Exists($sValue))
+EndFunc
+
+Func _SetUnion($oFirst, $oSecond)
+    Local $oMerged = ObjCreate("Scripting.Dictionary")
+    $oMerged.CompareMode = 1
+    For $sKey In $oFirst.Keys
+        If Not $oMerged.Exists($sKey) Then $oMerged.Add($sKey, True)
+    Next
+    For $sKey In $oSecond.Keys
+        If Not $oMerged.Exists($sKey) Then $oMerged.Add($sKey, True)
+    Next
+    Return $oMerged
 EndFunc
 
 Func _LVComposeKey($hLV, $iRow, $sCols)
@@ -5286,7 +5322,7 @@ Func _CrossCheckMachineCalendarRef($hLV, $iCTTypeCol, $iCalCol, $sSet, $sDesc, $
             ContinueLoop
         EndIf
 
-        If Not StringInStr($sSet, ";" & $sVal & ";") Then
+        If Not _SetContains($sSet, $sVal) Then
             $nIssues += 1
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sVal & "' does not exist in the referenced tab.")
         EndIf
@@ -5310,7 +5346,7 @@ Func _CrossCheckItemRoutingRef($hLV, $iTypeCol, $iRoutingCol, $sSet, $sDesc, $bA
             ContinueLoop
         EndIf
 
-        If Not StringInStr($sSet, ";" & $sVal & ";") Then
+        If Not _SetContains($sSet, $sVal) Then
             $nIssues += 1
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sVal & "' does not exist in the referenced tab.")
         EndIf
@@ -5330,7 +5366,7 @@ Func _CrossCheckMachineRef($hLV, $iCol, $sSet, $sDesc, $bAllowEmpty = False)
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": empty value.")
             ContinueLoop
         EndIf
-        If Not StringInStr($sSet, ";" & $sVal & ";") Then
+        If Not _SetContains($sSet, $sVal) Then
             $nIssues += 1
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sVal & "' does not exist in the referenced tab.")
         EndIf
@@ -5353,7 +5389,7 @@ Func _CrossCheckCompositeMachineRef($hLV, $sCols, $iMachineCol, $sSet, $sDesc, $
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": one or more key fields are empty.")
             ContinueLoop
         EndIf
-        If Not StringInStr($sSet, ";" & $sKey & ";") Then
+        If Not _SetContains($sSet, $sKey) Then
             $nIssues += 1
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sKey & "' does not match any valid combination in the referenced tab.")
         EndIf
@@ -5372,7 +5408,7 @@ Func _CrossCheck($hLV, $iCol, $sSet, $sDesc, $bAllowEmpty = False)
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": empty value.")
             ContinueLoop
         EndIf
-        If Not StringInStr($sSet, ";" & $sVal & ";") Then
+        If Not _SetContains($sSet, $sVal) Then
             $nIssues += 1
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sVal & "' does not exist in the referenced tab.")
         EndIf
@@ -5391,7 +5427,7 @@ Func _CrossCheckComposite($hLV, $sCols, $sSet, $sDesc, $bAllowEmpty = False)
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": one or more key fields are empty.")
             ContinueLoop
         EndIf
-        If Not StringInStr($sSet, ";" & $sKey & ";") Then
+        If Not _SetContains($sSet, $sKey) Then
             $nIssues += 1
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sKey & "' does not match any valid combination in the referenced tab.")
         EndIf
@@ -5422,7 +5458,7 @@ Func _CrossCheckInventoryItemVersion($hLV, $iItemCol, $iVerCol, $sSet, $sDesc)
         EndIf
 
         Local $sKey = $sItem & "|" & $sVer
-        If Not StringInStr($sSet, ";" & $sKey & ";") Then
+        If Not _SetContains($sSet, $sKey) Then
             $nIssues += 1
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sKey & "' does not match any manufactured item/version in the Items tab.")
         EndIf
@@ -5458,7 +5494,7 @@ Func _CrossCheckInventoryItemRoutingVersion($hLV, $iItemCol, $iRoutingCol, $iVer
         EndIf
 
         Local $sKey = $sItem & "|" & $sRout & "|" & $sVer
-        If Not StringInStr($sSet, ";" & $sKey & ";") Then
+        If Not _SetContains($sSet, $sKey) Then
             $nIssues += 1
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": '" & $sKey & "' does not match any item/routing/version in the Items tab.")
         EndIf
@@ -5487,6 +5523,15 @@ EndFunc
 Func _ValidateWorkOrderRules()
     Local $nIssues = 0
     Local $setRoutPhase = _LVCompositeSet($g_hLV_Rout, "0,2")
+    Local $oRouteHasPhase = ObjCreate("Scripting.Dictionary")
+    $oRouteHasPhase.CompareMode = 1
+    For $sPhaseKey In $setRoutPhase.Keys
+        Local $nSep = StringInStr($sPhaseKey, "|")
+        If $nSep > 1 Then
+            Local $sRouteKey = StringLeft($sPhaseKey, $nSep - 1)
+            If Not $oRouteHasPhase.Exists($sRouteKey) Then $oRouteHasPhase.Add($sRouteKey, True)
+        EndIf
+    Next
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_WO)
     For $i = 0 To $nRows - 1
         Local $sWO   = StringStripWS(_GUICtrlListView_GetItemText($g_hLV_WO, $i, 0), 3)
@@ -5496,7 +5541,7 @@ Func _ValidateWorkOrderRules()
             $nIssues += 1
             _IntegrityIssue("Work Orders tab - row " & ($i + 1) & ": WO '" & $sWO & "' points to MP item '" & $sItem & "'. WOs must produce manufactured items with routing/version.")
         EndIf
-        If $sRout <> "" And Not _RoutingHasAtLeastOnePhase($sRout, $setRoutPhase) Then
+        If $sRout <> "" And Not _SetContains($oRouteHasPhase, $sRout) Then
             $nIssues += 1
             _IntegrityIssue("Work Orders tab - row " & ($i + 1) & ": routing '" & $sRout & "' has no phase. Ortems requires B_BT phase rows for each WO.")
         EndIf
@@ -5507,9 +5552,8 @@ EndFunc
 Func _RoutingHasAtLeastOnePhase($sRouting, $setRoutPhase)
     Local $sR = StringStripWS($sRouting, 3)
     If $sR = "" Then Return False
-    Local $aParts = StringSplit($setRoutPhase, ";", 1)
-    For $i = 1 To $aParts[0]
-        If StringLeft($aParts[$i], StringLen($sR) + 1) = $sR & "|" Then Return True
+    For $sKey In $setRoutPhase.Keys
+        If StringLeft($sKey, StringLen($sR) + 1) = $sR & "|" Then Return True
     Next
     Return False
 EndFunc
@@ -5614,7 +5658,7 @@ Func _AutoFixSimpleReferences()
 
     Local $setCalIDs         = _LVColSet($g_hLV_Cal, 0)
     Local $setCapCalIDs      = _LVColSet($g_hLV_Cap, 0)
-    Local $setAnyCalIDs      = $setCalIDs & StringTrimLeft($setCapCalIDs, 1)
+    Local $setAnyCalIDs      = _SetUnion($setCalIDs, $setCapCalIDs)
     Local $setCTIDs          = _LVColSet($g_hLV_Mach, 2)
     Local $setMachIDs        = _LVColSet($g_hLV_Mach, 7)
     Local $setOpeIDs         = _LVColSet($g_hLV_Ops, 0)
@@ -5730,7 +5774,7 @@ Func _AutoFixExactRef($hLV, $iCol, $sSet, $sDesc, $bAllowEmpty = False)
             If $bAllowEmpty Then ContinueLoop
             ContinueLoop
         EndIf
-        If StringInStr($sSet, ";" & $sVal & ";") Then ContinueLoop
+        If _SetContains($sSet, $sVal) Then ContinueLoop
 
         Local $sCanonical = _LookupCanonicalInSet($sSet, $sVal)
         If $sCanonical = "" Then ContinueLoop
@@ -5755,7 +5799,7 @@ Func _AutoFixMachineCalendarRef($hLV, $iCTTypeCol, $iCalCol, $sSet, $sDesc, $bAl
             If $bAllowEmpty Then ContinueLoop
             ContinueLoop
         EndIf
-        If StringInStr($sSet, ";" & $sVal & ";") Then ContinueLoop
+        If _SetContains($sSet, $sVal) Then ContinueLoop
 
         Local $sCanonical = _LookupCanonicalInSet($sSet, $sVal)
         If $sCanonical = "" Then ContinueLoop
@@ -5779,7 +5823,7 @@ Func _AutoFixMachineExactRef($hLV, $iCol, $sSet, $sDesc, $bAllowEmpty = False)
             If $bAllowEmpty Then ContinueLoop
             ContinueLoop
         EndIf
-        If StringInStr($sSet, ";" & $sVal & ";") Then ContinueLoop
+        If _SetContains($sSet, $sVal) Then ContinueLoop
 
         Local $sCanonical = _LookupCanonicalInSet($sSet, $sVal)
         If $sCanonical = "" Then ContinueLoop
@@ -5806,7 +5850,7 @@ Func _AutoFixItemRoutingRef($hLV, $iTypeCol, $iRoutingCol, $sSet, $sDesc, $bAllo
             If $bAllowEmpty Then ContinueLoop
             ContinueLoop
         EndIf
-        If StringInStr($sSet, ";" & $sVal & ";") Then ContinueLoop
+        If _SetContains($sSet, $sVal) Then ContinueLoop
 
         Local $sCanonical = _LookupCanonicalInSet($sSet, $sVal)
         If $sCanonical = "" Then ContinueLoop
@@ -5818,24 +5862,16 @@ Func _AutoFixItemRoutingRef($hLV, $iTypeCol, $iRoutingCol, $sSet, $sDesc, $bAllo
     Return $nFixed
 EndFunc
 
-Func _LookupCanonicalInSet($sSet, $sValue)
+Func _LookupCanonicalInSet($oSet, $sValue)
     Local $sNeedle = StringLower(StringStripWS($sValue, 3))
     If $sNeedle = "" Then Return ""
 
-    Local $aItems = StringSplit($sSet, ";", 1)
-    Local $sMatch = ""
-    Local $nMatches = 0
-
-    For $i = 1 To $aItems[0]
-        Local $sItem = $aItems[$i]
-        If $sItem = "" Then ContinueLoop
-        If StringLower(StringStripWS($sItem, 3)) = $sNeedle Then
-            $nMatches += 1
-            $sMatch = $sItem
-            If $nMatches > 1 Then Return ""
-        EndIf
+    ; Keys preserve the first spelling seen in the reference list.
+    ; A dictionary still enforces the original case-insensitive uniqueness.
+    For $sItem In $oSet.Keys
+        If StringLower(StringStripWS($sItem, 3)) = $sNeedle Then Return $sItem
     Next
-    Return $sMatch
+    Return ""
 EndFunc
 
 Func _AutoFixMachineByWC($hLV, $iWCCol, $iMachineCol, $sDesc)
@@ -5898,7 +5934,7 @@ Func _AutoFixRoutingByItemVersion($hLV, $iItemCol, $iVerCol, $iRoutingCol, $sDes
         Local $sRouting = StringStripWS($sRoutingRaw, 3)
 
         If $sItem = "" Or $sVer = "" Then ContinueLoop
-        If $sRouting <> "" And StringInStr($setRoutIDs, ";" & $sRouting & ";") Then ContinueLoop
+        If $sRouting <> "" And _SetContains($setRoutIDs, $sRouting) Then ContinueLoop
 
         Local $sResolved = _LookupUniqueRoutingByItemVersion($sItem, $sVer)
         If $sResolved = "" Then ContinueLoop
@@ -5951,7 +5987,7 @@ Func _AutoFixRoutingByWO($hLV, $iWOCol, $iRoutingCol, $sDesc)
         Local $sRouting = StringStripWS($sRoutingRaw, 3)
 
         If $sWO = "" Then ContinueLoop
-        If $sRouting <> "" And StringInStr($setRoutIDs, ";" & $sRouting & ";") Then ContinueLoop
+        If $sRouting <> "" And _SetContains($setRoutIDs, $sRouting) Then ContinueLoop
 
         Local $sResolved = _LookupUniqueRoutingByWO($sWO)
         If $sResolved = "" Then ContinueLoop
@@ -6117,17 +6153,18 @@ EndFunc
 
 Func _ValidateDuplicateKey($hLV, $sCols, $sDesc)
     Local $nIssues = 0
-    Local $sSeen = ";"
+    Local $oSeen = ObjCreate("Scripting.Dictionary")
+    $oSeen.CompareMode = 1
     Local $nRows = _GUICtrlListView_GetItemCount($hLV)
     For $i = 0 To $nRows - 1
         Local $sKey = _LVComposeKey($hLV, $i, $sCols)
         If $sKey = "" Then ContinueLoop
         Local $sNorm = StringLower(StringStripWS($sKey, 3))
-        If StringInStr($sSeen, ";" & $sNorm & ";") Then
+        If $oSeen.Exists($sNorm) Then
             $nIssues += 1
             _IntegrityIssue($sDesc & " - row " & ($i + 1) & ": duplicate key '" & $sKey & "'.")
         Else
-            $sSeen &= $sNorm & ";"
+            $oSeen.Add($sNorm, True)
         EndIf
     Next
     Return $nIssues
@@ -6135,8 +6172,10 @@ EndFunc
 
 Func _ValidateDuplicateMaterialKeys()
     Local $nIssues = 0
-    Local $sSeenRaw = ";"
-    Local $sSeenMfg = ";"
+    Local $oSeenRaw = ObjCreate("Scripting.Dictionary")
+    Local $oSeenMfg = ObjCreate("Scripting.Dictionary")
+    $oSeenRaw.CompareMode = 1
+    $oSeenMfg.CompareMode = 1
     Local $nRows = _GUICtrlListView_GetItemCount($g_hLV_Mat)
 
     For $i = 0 To $nRows - 1
@@ -6147,20 +6186,20 @@ Func _ValidateDuplicateMaterialKeys()
 
         If _IsRawMaterialType($sType) Then
             Local $sRawKey = StringLower($sItem)
-            If StringInStr($sSeenRaw, ";" & $sRawKey & ";") Then
+            If $oSeenRaw.Exists($sRawKey) Then
                 $nIssues += 1
                 _IntegrityIssue("Items tab / MP Item - row " & ($i + 1) & ": duplicate raw material item '" & $sItem & "'.")
             Else
-                $sSeenRaw &= $sRawKey & ";"
+                $oSeenRaw.Add($sRawKey, True)
             EndIf
         Else
             If $sVer = "" Then ContinueLoop
             Local $sMfgKey = StringLower($sItem & "|" & $sVer)
-            If StringInStr($sSeenMfg, ";" & $sMfgKey & ";") Then
+            If $oSeenMfg.Exists($sMfgKey) Then
                 $nIssues += 1
                 _IntegrityIssue("Items tab / Item + Version - row " & ($i + 1) & ": duplicate key '" & $sItem & "|" & $sVer & "'.")
             Else
-                $sSeenMfg &= $sMfgKey & ";"
+                $oSeenMfg.Add($sMfgKey, True)
             EndIf
         EndIf
     Next
@@ -6503,9 +6542,19 @@ Func _XLWorksheetDataRowCount($oSheet, $nCols)
     $nUsedRows = Number($oSheet.UsedRange.Rows.Count)
     If $g_sLastComError <> "" Or $nUsedRows < 4 Then Return 0
 
-    ; UsedRange can occasionally be larger than the actual imported data because of
-    ; formatting.  Walk upward from the bottom and stop at the first row that has
-    ; real text in the expected Toolbox columns.
+    ; Excel's native search finds the last VALUE inside our data columns and
+    ; ignores formatting-only used cells. Much faster than cell-by-cell COM.
+    $g_sLastComError = ""
+    Local $oData = $oSheet.Range($oSheet.Cells(4, 1), $oSheet.Cells($nUsedRows, $nCols))
+    If $g_sLastComError = "" And IsObj($oData) Then
+        Local $oLast = $oData.Find("*", $oData.Cells(1, 1), -4163, 2, 1, 2, False) ; xlValues/xlPart/xlByRows/xlPrevious
+        If $g_sLastComError = "" Then
+            If Not IsObj($oLast) Then Return 0
+            Return Number($oLast.Row) - 3
+        EndIf
+    EndIf
+
+    ; Fallback for unusual Excel COM implementations.
     For $r = $nUsedRows To 4 Step -1
         For $c = 1 To $nCols
             If StringStripWS(String($oSheet.Cells($r, $c).Text), 3) <> "" Then Return ($r - 3)
@@ -6524,9 +6573,36 @@ Func _XLWorksheetColumnHasText($oSheet, $iCol, $sExpected)
     $nUsedRows = Number($oSheet.UsedRange.Rows.Count)
     If $g_sLastComError <> "" Or $nUsedRows < 4 Then Return False
 
-    For $r = 4 To $nUsedRows
-        Local $sVal = StringUpper(StringStripWS(String($oSheet.Cells($r, $iCol).Text), 3))
-        If $sVal = $sFind Then Return True
+    $g_sLastComError = ""
+    Local $oRange = $oSheet.Range($oSheet.Cells(4, $iCol), $oSheet.Cells($nUsedRows, $iCol))
+    If $g_sLastComError = "" And IsObj($oRange) Then
+        Local $oFound = $oRange.Find($sFind, $oRange.Cells(1, 1), -4163, 1, 1, 1, False) ; xlValues/xlWhole/xlByRows/xlNext
+        If $g_sLastComError = "" Then
+            If IsObj($oFound) Then Return True
+            ; Find uses exact strings. Keep checking for the legacy whitespace
+            ; tolerance below only if an exact match wasn't found.
+        EndIf
+    EndIf
+    Local Const $nChunkRows = 2000
+    For $iStart = 4 To $nUsedRows Step $nChunkRows
+        Local $iEnd = $iStart + $nChunkRows - 1
+        If $iEnd > $nUsedRows Then $iEnd = $nUsedRows
+        Local $nBlockRows = $iEnd - $iStart + 1
+        Local $oBlock = $oSheet.Range($oSheet.Cells($iStart, $iCol), $oSheet.Cells($iEnd, $iCol))
+        $g_sLastComError = ""
+        Local $vBlock = $oBlock.Value2
+        If $g_sLastComError = "" And IsArray($vBlock) Then
+            If UBound($vBlock, 0) = 2 And UBound($vBlock, 1) = 1 And UBound($vBlock, 2) = $nBlockRows Then
+                For $r = 0 To $nBlockRows - 1
+                    If StringUpper(StringStripWS(String($vBlock[0][$r]), 3)) = $sFind Then Return True
+                Next
+                ContinueLoop
+            EndIf
+        EndIf
+        ; Handle scalar/unsupported values conservatively.
+        For $r = $iStart To $iEnd
+            If StringUpper(StringStripWS(String($oSheet.Cells($r, $iCol).Text), 3)) = $sFind Then Return True
+        Next
     Next
     Return False
 EndFunc
@@ -6702,9 +6778,11 @@ Func _XLImportWorksheetToLV($hLV, $oSheet)
     Local $nImported = 0, $hTimer = TimerInit()
     If $nDataCols < 1 Then Return 0
 
-    ; Bound memory use. Raw COM SAFEARRAYs have column-first dimensions in AutoIt
-    ; (see the native transpose in Excel.au3's _Excel_RangeRead).
-    Local Const $nChunkRows = 1000
+    ; Transfer contiguous blocks through Excel COM only once per block.
+    ; Value2 is safe for literal strings and empty cells regardless of NumberFormat.
+    ; For dates/numbers/booleans/error cells, retain the original .Text behavior to
+    ; preserve dates, times, leading zeros and Excel's displayed values.
+    Local Const $nChunkRows = 2000
     _GUICtrlListView_BeginUpdate($hLV)
     _GUICtrlListView_DeleteAllItems($hLV)
     For $iStart = 4 To $nUsedRows Step $nChunkRows
@@ -6712,28 +6790,29 @@ Func _XLImportWorksheetToLV($hLV, $oSheet)
         If $iEnd > $nUsedRows Then $iEnd = $nUsedRows
         Local $nBlockRows = $iEnd - $iStart + 1
         Local $oRange = $oSheet.Range($oSheet.Cells($iStart, 1), $oSheet.Cells($iEnd, $nDataCols))
-        Local $aValues = 0, $bBulk = False
         $g_sLastComError = ""
-        Local $vFormat = $oRange.NumberFormat
-        ; Only uniformly text-formatted blocks can bypass displayed-text reads.
-        ; Dates, numeric formatting, mixed formats and errors keep the old .Text path.
-        If IsString($vFormat) And $vFormat == "@" And $g_sLastComError = "" Then
-            $aValues = $oRange.Value2
-            If $g_sLastComError = "" And IsArray($aValues) Then
-                If UBound($aValues, 0) = 2 Then
-                    $bBulk = (UBound($aValues, 1) = $nDataCols And UBound($aValues, 2) = $nBlockRows)
-                EndIf
+        Local $aValues = $oRange.Value2
+        Local $bBulk = False
+        If $g_sLastComError = "" And IsArray($aValues) Then
+            If UBound($aValues, 0) = 2 Then
+                $bBulk = (UBound($aValues, 1) = $nDataCols And UBound($aValues, 2) = $nBlockRows)
             EndIf
         EndIf
+
         For $r = $iStart To $iEnd
             Local $sItem = "", $bEmpty = True
             For $c = 1 To $nDataCols
                 Local $sCell = "", $bReadText = True
                 If $bBulk Then
-                    ; Non-string variants (including Excel error codes) require .Text.
-                    If IsString($aValues[$c - 1][$r - $iStart]) Then
-                        $sCell = $aValues[$c - 1][$r - $iStart]
+                    Local $vCell = $aValues[$c - 1][$r - $iStart]
+                    If IsString($vCell) Then
+                        $sCell = $vCell
                         $bReadText = False
+                    Else
+                        ; Blank cells used to generate one slow Excel.Cells().Text
+                        ; COM call *per blank cell*, even when Value2 was bulk-read.
+                        Local $sType = VarGetType($vCell)
+                        If $sType = "Empty" Or $sType = "Null" Then $bReadText = False
                     EndIf
                 EndIf
                 If $bReadText Then $sCell = $oSheet.Cells($r, $c).Text
@@ -6742,9 +6821,9 @@ Func _XLImportWorksheetToLV($hLV, $oSheet)
                 $sItem &= StringReplace($sCell, "|", "/")
             Next
             If $bEmpty Then ContinueLoop
-            ; Keep AutoIt-owned ListView items and the existing append helper.
-            ; It already assigns consecutive line numbers, so no renumber pass is needed.
-            _LV_AppendDataRow($hLV, $sItem)
+            ; This ListView uses AutoIt-owned items for compatibility with the
+            ; existing editing/sorting controls; avoid an extra count query per row.
+            GUICtrlCreateListViewItem($sItem & "|" & ($nImported + 1), $hLV)
             $nImported += 1
         Next
     Next
@@ -6914,10 +6993,12 @@ Func _ImportExcel()
     EndIf
 
     Local $nTotalRows = 0
+    Local $hReadTimer = TimerInit()
     For $i = 0 To UBound($aMap) - 1
         Local $oSheet = _XLSheetByName($oBook, $aMap[$i][1])
         $nTotalRows += _XLImportWorksheetToLV($aMap[$i][0], $oSheet)
     Next
+    _LogVerbose("Workbook data read and ListViews populated in " & Round(TimerDiff($hReadTimer) / 1000, 2) & " s")
 
     $oBook.Close(False)
     $oExcel.Quit()
@@ -6938,7 +7019,9 @@ Func _ImportExcel()
         _DetectModulesFromImportedWorkbookData()
     EndIf
 
+    Local $hCheckTimer = TimerInit()
     Local $nIssues = _ValidateFKBeforeImport()
+    _LogVerbose("Workbook integrity check finished in " & Round(TimerDiff($hCheckTimer) / 1000, 2) & " s")
     _Log("Workbook import finished: " & $nTotalRows & " data rows <- " & $sFile)
 
     Local $sMsg = "Imported " & $nTotalRows & " data row(s) from:" & @CRLF & $sFile & @CRLF & @CRLF & _
