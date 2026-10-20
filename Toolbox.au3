@@ -3,9 +3,9 @@
 #AutoIt3Wrapper_UseX64=y
 #AutoIt3Wrapper_UseUpx=n
 #AutoIt3Wrapper_Res_Description=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_Fileversion=1.1.7.2
+#AutoIt3Wrapper_Res_Fileversion=1.1.7.3
 #AutoIt3Wrapper_Res_ProductName=Ortems SQL Toolbox
-#AutoIt3Wrapper_Res_ProductVersion=1.1.7.2
+#AutoIt3Wrapper_Res_ProductVersion=1.1.7.3
 #AutoIt3Wrapper_Res_CompanyName=Ortems Toolbox
 #AutoIt3Wrapper_Res_LegalCopyright=Copyright © 2026 Ortems Toolbox
 #AutoIt3Wrapper_Res_File_Add=.\Updater.exe
